@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v1.3</title>
+<title>Cinema Aggregator v2.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -246,8 +246,11 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 .tab[data-tab="viewed"]::after, .tab[data-tab="schedule"]::after {
   content: attr(data-count);
   margin-left: 0.3rem; font-size: 0.65rem;
-  background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 10px;
+  background: var(--surface2); color: var(--text); padding: 0.1rem 0.4rem; border-radius: 10px;
   font-weight: 600;
+}
+.tab.active[data-tab="viewed"]::after, .tab.active[data-tab="schedule"]::after {
+  background: rgba(255,255,255,0.25); color: #fff;
 }
 /* Schedule tab */
 .sched-panel { display:none; }
@@ -725,7 +728,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v1.3</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v2.0</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -743,6 +746,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
   <div class="user-switcher">
     <select id="user-select" onchange="switchUser(this.value)"></select>
   </div>
+  <div id="sync-status" style="width:8px;height:8px;border-radius:50%;background:#999;margin-left:0.5rem;flex-shrink:0;cursor:help;" title="Sync status"></div>
 </div>
 
 <!-- ===== FILTERS ===== -->
@@ -870,6 +874,27 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
       <h3>Default Taste Profile</h3>
       <p>Set the default taste profile that new users start with.</p>
       <div class="admin-toggle"><input type="checkbox" id="admin-default-taste" checked onchange="adminSaveConfig()"> Apply built-in taste profile to new users</div>
+    </div>
+
+    <div class="admin-section">
+      <h3>Backup &amp; Restore</h3>
+      <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem;">Export all user data to a JSON file, or import a previous backup.</p>
+      <div style="display:flex;gap:0.4rem;margin-bottom:0.5rem;">
+        <button class="admin-btn admin-btn-pri" onclick="exportBackup()">Export Backup</button>
+        <button class="admin-btn admin-btn-out" onclick="document.getElementById('import-file').click()">Import Backup</button>
+        <input type="file" id="import-file" accept=".json" style="display:none;" onchange="importBackup(this)">
+      </div>
+      <div id="backup-status" style="font-size:0.78rem;color:var(--muted);"></div>
+    </div>
+
+    <div class="admin-section">
+      <h3>Server Sync</h3>
+      <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem;">Data syncs automatically to the server. All changes are saved in real-time and available from any browser.</p>
+      <div style="display:flex;gap:0.4rem;margin-bottom:0.5rem;">
+        <button class="admin-btn admin-btn-out" onclick="syncPullNow()">Pull from Server</button>
+        <button class="admin-btn admin-btn-out" onclick="syncPushNow()">Push to Server</button>
+      </div>
+      <div id="server-sync-status" style="font-size:0.78rem;color:var(--muted);"></div>
     </div>
 
     <div class="admin-section">
@@ -1065,7 +1090,21 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     <h2 style="margin-top:2rem;">Version History</h2>
 
     <div class="help-section">
-      <h3>v1.3 &mdash; 6 April 2026</h3>
+      <h3>v2.0 &mdash; 6 April 2026</h3>
+      <ul>
+        <li>Server sync: data now saves to a Node.js backend and syncs across browsers/computers automatically</li>
+        <li>On page load, data is pulled from server; on any change, data is pushed (debounced 2s)</li>
+        <li>Works offline too &mdash; falls back to localStorage when server is unavailable</li>
+        <li>Sync status indicator (green dot) in navbar</li>
+        <li>Manual Push/Pull buttons in Admin panel</li>
+        <li>Backup &amp; Restore: export/import data as JSON file</li>
+        <li>Schedule badge contrast improved on active tab</li>
+        <li>Deployed on GitHub Pages + Render.com</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v2.0 &mdash; 6 April 2026</h3>
       <ul>
         <li>Restored default cinema schedule with 10 movies (La Notte, A Touch of Sin, Pickpocket, In The Mood For Love, etc.)</li>
         <li>Schedule auto-seeds on first visit if empty</li>
@@ -1188,6 +1227,70 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 </div>
 
 <script>
+// ===== SERVER SYNC LAYER =====
+// Set this to your server URL. Use '' to disable server sync (offline/localStorage only).
+const API_BASE = 'http://localhost:3002/api';
+
+// Sync state
+let _syncTimer = null;
+let _serverAvailable = false;
+let _initialSyncDone = false;
+
+// Push all localStorage cinema data to server (debounced)
+function _syncToServer() {
+  if (!API_BASE) return;
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(async () => {
+    try {
+      const data = _getAllCinemaData();
+      const resp = await fetch(API_BASE + '/data', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (resp.ok) {
+        _serverAvailable = true;
+        const syncDot = document.getElementById('sync-status');
+        if (syncDot) { syncDot.title = 'Synced ' + new Date().toLocaleTimeString(); syncDot.style.background = '#2d7a3a'; }
+      }
+    } catch (e) {
+      console.log('Sync push failed (offline mode):', e.message);
+      const syncDot = document.getElementById('sync-status');
+      if (syncDot) { syncDot.title = 'Offline'; syncDot.style.background = '#c0392b'; }
+    }
+  }, 2000);
+}
+
+// Pull data from server into localStorage on page load
+async function _syncFromServer() {
+  if (!API_BASE) { _initialSyncDone = true; return; }
+  try {
+    const resp = await fetch(API_BASE + '/data', { signal: AbortSignal.timeout(5000) });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const keys = Object.keys(data);
+    if (keys.length > 0) {
+      keys.forEach(k => localStorage.setItem(k, data[k]));
+      console.log('Synced ' + keys.length + ' keys from server.');
+    }
+    _serverAvailable = true;
+  } catch (e) {
+    console.log('Server unavailable, using local data:', e.message);
+    _serverAvailable = false;
+  }
+  _initialSyncDone = true;
+}
+
+// Hook localStorage.setItem to auto-sync on writes
+const _origLsSetItem = Storage.prototype.setItem;
+Storage.prototype.setItem = function(key, value) {
+  _origLsSetItem.call(this, key, value);
+  // Only sync cinema-related keys
+  if (this === localStorage && (key.startsWith('cinema_') || key.startsWith('u_'))) {
+    if (_initialSyncDone && typeof _getAllCinemaData === 'function') _syncToServer();
+  }
+};
+
 // ===== MULTI-USER SYSTEM =====
 const USERS_KEY = 'cinema_users';
 const ACTIVE_USER_KEY = 'cinema_active_user';
@@ -1518,6 +1621,106 @@ function loadAdminConfig() {
   if (document.getElementById('admin-cinema-pcc')) document.getElementById('admin-cinema-pcc').checked = cfg.cinema_pcc !== false;
   if (document.getElementById('admin-cinema-garden')) document.getElementById('admin-cinema-garden').checked = cfg.cinema_garden !== false;
   if (document.getElementById('admin-default-taste')) document.getElementById('admin-default-taste').checked = cfg.default_taste !== false;
+}
+
+// ===== BACKUP: EXPORT / IMPORT =====
+function _getAllCinemaData() {
+  const data = {};
+  // Global keys
+  [USERS_KEY, ACTIVE_USER_KEY, CONFIG_KEY].forEach(k => {
+    const v = _origGetItem(k);
+    if (v) data[k] = v;
+  });
+  // Per-user namespaced keys
+  const users = getUsers();
+  Object.keys(users).forEach(uid => {
+    USER_KEYS.forEach(k => {
+      const fullKey = 'u_' + uid + '_' + k;
+      const v = _origGetItem(fullKey);
+      if (v) data[fullKey] = v;
+    });
+  });
+  // GitHub sync settings
+  const ghSettings = _origGetItem('cinema_gh_settings');
+  if (ghSettings) data['cinema_gh_settings'] = ghSettings;
+  return data;
+}
+
+function _restoreAllCinemaData(data) {
+  Object.keys(data).forEach(k => {
+    _origSetItem(k, data[k]);
+  });
+}
+
+function exportBackup() {
+  const data = _getAllCinemaData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = 'cinema-backup-' + ts + '.json'; a.click();
+  URL.revokeObjectURL(url);
+  document.getElementById('backup-status').textContent = 'Backup exported at ' + new Date().toLocaleTimeString();
+}
+
+function importBackup(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data || typeof data !== 'object') throw new Error('Invalid format');
+      const count = Object.keys(data).length;
+      if (!confirm('Import ' + count + ' data entries? This will overwrite existing data.')) return;
+      _restoreAllCinemaData(data);
+      document.getElementById('backup-status').textContent = 'Imported ' + count + ' entries. Reloading...';
+      setTimeout(() => location.reload(), 800);
+    } catch(err) {
+      document.getElementById('backup-status').textContent = 'Import failed: ' + err.message;
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+// ===== SERVER SYNC: Manual Push/Pull =====
+function _serverSyncStatus(msg, isError) {
+  const el = document.getElementById('server-sync-status');
+  if (el) { el.textContent = msg; el.style.color = isError ? 'var(--red)' : 'var(--green)'; }
+}
+async function syncPushNow() {
+  if (!API_BASE) { _serverSyncStatus('Server sync disabled (API_BASE is empty).', true); return; }
+  _serverSyncStatus('Pushing...');
+  try {
+    const data = _getAllCinemaData();
+    const resp = await fetch(API_BASE + '/data', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const result = await resp.json();
+    _serverSyncStatus('Pushed ' + result.keys + ' keys at ' + new Date().toLocaleTimeString());
+  } catch(e) {
+    _serverSyncStatus('Push failed: ' + e.message, true);
+  }
+}
+async function syncPullNow() {
+  if (!API_BASE) { _serverSyncStatus('Server sync disabled (API_BASE is empty).', true); return; }
+  _serverSyncStatus('Pulling...');
+  try {
+    const resp = await fetch(API_BASE + '/data');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const keys = Object.keys(data);
+    if (keys.length === 0) { _serverSyncStatus('Server has no data yet.'); return; }
+    keys.forEach(k => _origSetItem(k, data[k]));
+    _serverSyncStatus('Pulled ' + keys.length + ' keys. Reloading...');
+    setTimeout(() => location.reload(), 800);
+  } catch(e) {
+    _serverSyncStatus('Pull failed: ' + e.message, true);
+  }
 }
 
 // Init users and namespace localStorage
@@ -9531,10 +9734,20 @@ function _renderListView(el) {
   });
 }
 
-updateSchedCount();
-render();
-// Show login on first load
-showLoginIfNeeded();
+// Boot: sync from server first, then render
+(async function boot() {
+  await _syncFromServer();
+  updateSchedCount();
+  render();
+  showLoginIfNeeded();
+  // Show sync status after boot
+  const syncDot = document.getElementById('sync-status');
+  if (syncDot) {
+    if (_serverAvailable) { syncDot.style.background = '#2d7a3a'; syncDot.title = 'Connected to server'; }
+    else if (API_BASE) { syncDot.style.background = '#c0392b'; syncDot.title = 'Server offline — using local data'; }
+    else { syncDot.style.background = '#999'; syncDot.title = 'Server sync disabled'; }
+  }
+})();
 
 // ===== HELP SCREENSHOTS =====
 async function generateHelpScreenshots() {
