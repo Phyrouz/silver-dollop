@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v1.2</title>
+<title>Cinema Aggregator v1.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -725,7 +725,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v1.2</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v1.3</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1063,6 +1063,14 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <h2 style="margin-top:2rem;">Version History</h2>
+
+    <div class="help-section">
+      <h3>v1.3 &mdash; 6 April 2026</h3>
+      <ul>
+        <li>Restored default cinema schedule with 10 movies (La Notte, A Touch of Sin, Pickpocket, In The Mood For Love, etc.)</li>
+        <li>Schedule auto-seeds on first visit if empty</li>
+      </ul>
+    </div>
 
     <div class="help-section">
       <h3>v1.2 &mdash; 6 April 2026</h3>
@@ -9001,6 +9009,25 @@ document.querySelectorAll('.tab').forEach(tab => {
 
 // --- My Schedule (Calendar View) ---
 function getSchedule() { return JSON.parse(localStorage.getItem('cinema_schedule') || '[]'); }
+
+// Seed default schedule if empty (restored user schedule)
+(function seedDefaultSchedule() {
+  const existing = JSON.parse(localStorage.getItem('cinema_schedule') || '[]');
+  if (existing.length > 0) return; // don't overwrite if user already has data
+  const defaultSchedule = [
+    { title: "La Notte", year: "1961", director: "", genre: "", venue: "The Garden Cinema", date: "2026-04-05", time: "13:30", booked: true },
+    { title: "A Touch of Sin", year: "2013", director: "", genre: "", venue: "The Garden Cinema", date: "2026-04-08", time: "17:45", booked: true },
+    { title: "Father Mother Sister Brother", year: "2025", director: "", genre: "", venue: "The Garden Cinema", date: "2026-04-15", time: "", booked: true },
+    { title: "Mountains May Depart", year: "2015", director: "", genre: "", venue: "The Garden Cinema", date: "2026-04-16", time: "", booked: true },
+    { title: "Pickpocket", year: "1959", director: "", genre: "", venue: "BFI Southbank · NFT2", date: "2026-04-30", time: "20:30", booked: false },
+    { title: "La ciénaga", year: "2001", director: "", genre: "", venue: "The Garden Cinema", date: "2026-05-18", time: "", booked: true },
+    { title: "Brazil 1967. Director Ozualdo R. Candeias. With Mario Benvenutti,", year: "1965", director: "Ozualdo R. Candeias", genre: "", venue: "BFI Southbank · NFT3", date: "2026-05-21", time: "18:30", booked: false },
+    { title: "In The Mood For Love", year: "2000", director: "", genre: "", venue: "Prince Charles Cinema · 35mm", date: "2026-06-10", time: "17:45", booked: false },
+    { title: "Zama", year: "2018", director: "", genre: "", venue: "The Garden Cinema", date: "2026-06-11", time: "", booked: true },
+    { title: "El secreto de sus ojos (The Secret in Their Eyes)", year: "2009", director: "", genre: "", venue: "The Garden Cinema", date: "2026-06-16", time: "", booked: true }
+  ];
+  localStorage.setItem('cinema_schedule', JSON.stringify(defaultSchedule));
+})();
 function _findMovieByTitle(title) {
   if (!title) return null;
   const t = title.toLowerCase();
