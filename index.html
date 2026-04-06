@@ -9404,15 +9404,18 @@ function _getCalendarEvents() {
 
   // Add scheduled movies
   sched.forEach((s, i) => {
-    if (!s.date) return;
+    const date = s.date || (s.showtime && s.showtime.date) || '';
+    const time = s.time || (s.showtime && s.showtime.time) || '';
+    const format = s.format || (s.showtime && s.showtime.format) || '';
+    if (!date) return;
     events.push({
-      date: s.date, time: s.time || '', title: s.title || '',
+      date: date, time: time, title: s.title || '',
       year: s.year, director: s.director, venue: s.venue || '',
-      format: s.format, booked: s.booked || false,
+      format: format, booked: s.booked || false,
       taste_score: s.taste_score || null,
       summary: s.summary || '',
       genre: s.genre || '',
-      schedIdx: i, source: 'schedule', past: s.date < todayStr
+      schedIdx: i, source: 'schedule', past: date < todayStr
     });
   });
 
@@ -9667,6 +9670,10 @@ function _renderListView(el) {
   const upcoming = [], past = [];
   sched.forEach((s, i) => {
     s._idx = i;
+    // Normalize: flatten showtime into top-level fields if missing
+    if (!s.date && s.showtime && s.showtime.date) s.date = s.showtime.date;
+    if (!s.time && s.showtime && s.showtime.time) s.time = s.showtime.time;
+    if (!s.format && s.showtime && s.showtime.format) s.format = s.showtime.format;
     if (s.date && s.date < today) past.push(s);
     else upcoming.push(s);
   });
