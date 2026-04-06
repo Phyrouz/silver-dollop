@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v1.1</title>
+<title>Cinema Aggregator v1.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -725,7 +725,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v1.1</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v1.2</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1065,6 +1065,14 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     <h2 style="margin-top:2rem;">Version History</h2>
 
     <div class="help-section">
+      <h3>v1.2 &mdash; 6 April 2026</h3>
+      <ul>
+        <li>Admin taste profile pre-seeded on first visit (Lynch, Bergman, Kubrick, Tarkovsky, etc.)</li>
+        <li>All user data now initializes correctly when hosted online</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
       <h3>v1.1 &mdash; 6 April 2026</h3>
       <ul>
         <li>Help tab enhanced with live screenshots &mdash; click "Generate Screenshots" to capture each tab</li>
@@ -1224,12 +1232,31 @@ function initUsers() {
     };
     setUsers(users);
     setActiveUser('admin');
+    // Seed Admin taste profile
+    seedAdminUser();
     // Flag to seed demo data after MOVIES is loaded
     window._needDemoSeed = true;
   }
   if (!getActiveUser() || !users[getActiveUser()]) {
     setActiveUser(Object.keys(users)[0]);
   }
+}
+
+function seedAdminUser() {
+  const prefix = 'u_admin_';
+  const adminProfile = {
+    p_default: {
+      name: 'Default Profile',
+      films: 'Stalker\nMulholland Drive\nPersona\nCache\nBlue Velvet\nBarry Lyndon\nIn the Mood for Love',
+      directors: 'David Lynch\nIngmar Bergman\nMichael Haneke\nStanley Kubrick\nWong Kar-wai\nAndrei Tarkovsky\nFederico Fellini\nAki Kaurismaki\nMichelangelo Antonioni\nRobert Bresson',
+      genres: 'arthouse\nsurreal\npsychological\nnoir\nexperimental',
+      dislike: 'superhero\nformulaic\nsequel\nfranchise',
+      notes: 'Auteur-driven, psychologically intense cinema. Slow pacing, long takes, ambiguity, unresolved endings preferred.',
+      netflix: []
+    }
+  };
+  _origSetItem(prefix + 'cinema_profiles', JSON.stringify(adminProfile));
+  _origSetItem(prefix + 'cinema_active_profile', 'p_default');
 }
 
 function seedDemoUser() {
