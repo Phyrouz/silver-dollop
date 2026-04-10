@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v2.1</title>
+<title>Cinema Aggregator v2.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -287,6 +287,28 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 .sched-card .sc-remove:hover { color:var(--red); border-color:var(--red); }
 .sc-booked { display:flex; align-items:center; gap:.3rem; font-size:.7rem; color:var(--muted); cursor:pointer; white-space:nowrap; }
 .sc-booked input { accent-color:var(--green); width:14px; height:14px; cursor:pointer; }
+.sc-change-date {
+  padding:.25rem .5rem; background:var(--surface2); border:1px solid var(--border);
+  border-radius:5px; font-size:.75rem; color:var(--muted); cursor:pointer; font-family:inherit;
+}
+.sc-change-date:hover { color:var(--accent); border-color:var(--accent); }
+.sched-date-picker {
+  position:fixed; z-index:500; background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,.15); padding:1rem; min-width:280px; max-width:340px;
+}
+.sched-date-picker h4 { font-family:'Playfair Display',serif; font-size:.95rem; margin-bottom:.6rem; color:var(--text); }
+.sdp-option {
+  display:block; width:100%; text-align:left; padding:.45rem .6rem; margin-bottom:.3rem;
+  background:var(--surface2); border:1px solid var(--border); border-radius:6px;
+  font-size:.78rem; color:var(--text); cursor:pointer; font-family:inherit;
+}
+.sdp-option:hover { border-color:var(--accent); background:#fdf6e8; }
+.sdp-option.sdp-current { border-color:var(--accent2); background:#f5efe6; font-weight:600; }
+.sdp-custom { margin-top:.5rem; padding-top:.5rem; border-top:1px solid var(--border); }
+.sdp-custom label { font-size:.72rem; color:var(--muted); display:block; margin-bottom:.2rem; }
+.sdp-custom input { width:100%; padding:.35rem .5rem; border:1px solid var(--border); border-radius:5px; font-size:.8rem; font-family:inherit; margin-bottom:.4rem; }
+.sdp-custom button { padding:.35rem .8rem; background:var(--accent2); color:#fff; border:none; border-radius:5px; font-size:.75rem; cursor:pointer; font-family:inherit; }
+.sdp-close { position:absolute; top:.5rem; right:.7rem; background:none; border:none; font-size:1.1rem; cursor:pointer; color:var(--muted); }
 .sc-booked.checked { color:var(--green); font-weight:600; }
 .sched-toggle label { font-size:.82rem; color:var(--muted); cursor:pointer; display:flex; align-items:center; gap:.3rem; }
 .sched-toggle input { accent-color:var(--accent); }
@@ -728,7 +750,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v2.1</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v2.2</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1090,7 +1112,15 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     <h2 style="margin-top:2rem;">Version History</h2>
 
     <div class="help-section">
-      <h3>v2.1 &mdash; 7 April 2026</h3>
+      <h3>v2.2 &mdash; 9 April 2026</h3>
+      <ul>
+        <li>Change date: click the date box or pencil icon on any schedule entry to change its date/time</li>
+        <li>Date picker shows all available showtimes from the movie list, plus a custom date/time option</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v2.2 &mdash; 7 April 2026</h3>
       <ul>
         <li>Fixed: Month and Week calendar views now display all schedule entries correctly</li>
         <li>Schedule entries with nested showtime data are now normalized automatically</li>
@@ -1098,7 +1128,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <div class="help-section">
-      <h3>v2.1 &mdash; 6 April 2026</h3>
+      <h3>v2.2 &mdash; 6 April 2026</h3>
       <ul>
         <li>Server sync: data now saves to a Node.js backend and syncs across browsers/computers automatically</li>
         <li>On page load, data is pulled from server; on any change, data is pushed (debounced 2s)</li>
@@ -1112,7 +1142,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <div class="help-section">
-      <h3>v2.1 &mdash; 6 April 2026</h3>
+      <h3>v2.2 &mdash; 6 April 2026</h3>
       <ul>
         <li>Restored default cinema schedule with 10 movies (La Notte, A Touch of Sin, Pickpocket, In The Mood For Love, etc.)</li>
         <li>Schedule auto-seeds on first visit if empty</li>
@@ -9263,6 +9293,98 @@ function toggleBooked(i) {
   renderSchedule();
 }
 
+// --- Change Date Picker ---
+function showDatePicker(schedIdx) {
+  // Remove any existing picker
+  const old = document.querySelector('.sched-date-picker');
+  if (old) old.remove();
+
+  const sched = getSchedule();
+  const entry = sched[schedIdx];
+  if (!entry) return;
+
+  // Find matching movie in MOVIES to get available showtimes
+  const movie = _findMovieByTitle(entry.title);
+  const showtimes = (movie && movie.showtimes) ? movie.showtimes : [];
+  const currentDate = entry.date || '';
+  const currentTime = entry.time || '';
+
+  // Build picker HTML
+  let optionsHtml = '';
+  if (showtimes.length) {
+    optionsHtml += '<div style="font-size:.7rem;color:var(--muted);margin-bottom:.3rem;">Available showtimes:</div>';
+    showtimes.forEach((st, i) => {
+      if (!st.date) return;
+      let label = st.date;
+      try {
+        const dt = new Date(st.date + 'T00:00:00');
+        label = dt.toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'long'});
+      } catch(e) {}
+      const timeStr = st.time || 'Time TBC';
+      const formatStr = st.format && st.format !== 'Digital' ? ' (' + st.format + ')' : '';
+      const isCurrent = st.date === currentDate && (st.time || '') === currentTime;
+      optionsHtml += `<button class="sdp-option ${isCurrent ? 'sdp-current' : ''}" onclick="changeScheduleDate(${schedIdx},'${st.date}','${st.time||''}','${st.format||''}','${(movie.venue||'').replace(/'/g,"\\'")}');closeDatePicker()">${label} — ${timeStr}${formatStr}${isCurrent ? ' ✓' : ''}</button>`;
+    });
+  } else {
+    optionsHtml += '<div style="font-size:.75rem;color:var(--muted);margin-bottom:.4rem;">No showtimes in movie list.</div>';
+  }
+
+  const picker = document.createElement('div');
+  picker.className = 'sched-date-picker';
+  picker.innerHTML = `
+    <button class="sdp-close" onclick="closeDatePicker()">&times;</button>
+    <h4>Change Date — ${entry.title}</h4>
+    ${optionsHtml}
+    <div class="sdp-custom">
+      <label>Or set a custom date &amp; time:</label>
+      <input type="date" id="sdp-date" value="${currentDate}">
+      <input type="time" id="sdp-time" value="${currentTime.replace('.', ':') || ''}">
+      <button onclick="changeScheduleDate(${schedIdx}, document.getElementById('sdp-date').value, document.getElementById('sdp-time').value, '', '');closeDatePicker()">Set Date</button>
+    </div>
+  `;
+  document.body.appendChild(picker);
+
+  // Position near center of screen
+  picker.style.top = '50%';
+  picker.style.left = '50%';
+  picker.style.transform = 'translate(-50%, -50%)';
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', _closeDatePickerOutside);
+  }, 50);
+}
+
+function _closeDatePickerOutside(e) {
+  const picker = document.querySelector('.sched-date-picker');
+  if (picker && !picker.contains(e.target) && !e.target.closest('.sc-date') && !e.target.closest('.sc-change-date')) {
+    closeDatePicker();
+  }
+}
+
+function closeDatePicker() {
+  const picker = document.querySelector('.sched-date-picker');
+  if (picker) picker.remove();
+  document.removeEventListener('click', _closeDatePickerOutside);
+}
+
+function changeScheduleDate(schedIdx, newDate, newTime, newFormat, newVenue) {
+  const sched = getSchedule();
+  if (!sched[schedIdx]) return;
+  if (newDate) sched[schedIdx].date = newDate;
+  if (newTime !== undefined) sched[schedIdx].time = newTime;
+  if (newFormat) sched[schedIdx].format = newFormat;
+  if (newVenue) sched[schedIdx].venue = newVenue;
+  // Also update nested showtime if present
+  if (sched[schedIdx].showtime) {
+    if (newDate) sched[schedIdx].showtime.date = newDate;
+    if (newTime !== undefined) sched[schedIdx].showtime.time = newTime;
+    if (newFormat) sched[schedIdx].showtime.format = newFormat;
+  }
+  localStorage.setItem('cinema_schedule', JSON.stringify(sched));
+  renderSchedule();
+}
+
 // Calendar state
 let calView = 'list'; // 'list', 'month', or 'week'
 let calDate = new Date(); // current reference date
@@ -9720,7 +9842,7 @@ function _renderListView(el) {
     }
     const booked = s.booked || false;
     return `<div class="sched-card ${isPast?'past':''}" data-sched-title="${(s.title||'').replace(/"/g,'&quot;')}" style="cursor:pointer;">
-      <div class="sc-date">${dateDisplay}</div>
+      <div class="sc-date" style="cursor:pointer;" onclick="event.stopPropagation();showDatePicker(${s._idx})" title="Click to change date">${dateDisplay}</div>
       <div class="sc-info">
         <div class="sc-title">${s.title}${s.year?' ('+s.year+')':''}</div>
         <div class="sc-meta">${s.time||''} &middot; ${s.venue}${s.format&&s.format!=='Digital'?' &middot; '+s.format:''}</div>
@@ -9728,6 +9850,7 @@ function _renderListView(el) {
       <label class="sc-booked ${booked?'checked':''}">
         <input type="checkbox" ${booked?'checked':''} onchange="toggleBooked(${s._idx})"> Booked Ticket
       </label>
+      <button class="sc-change-date" onclick="event.stopPropagation();showDatePicker(${s._idx})" title="Change date/time">&#9998;</button>
       <button class="sc-remove" onclick="removeFromSchedule(${s._idx})">Remove</button>
     </div>`;
   }
