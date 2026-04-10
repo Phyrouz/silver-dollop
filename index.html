@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v2.2</title>
+<title>Cinema Aggregator v2.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -750,7 +750,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v2.2</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v2.3</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1112,15 +1112,16 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     <h2 style="margin-top:2rem;">Version History</h2>
 
     <div class="help-section">
-      <h3>v2.2 &mdash; 9 April 2026</h3>
+      <h3>v2.3 &mdash; 9 April 2026</h3>
       <ul>
         <li>Change date: click the date box or pencil icon on any schedule entry to change its date/time</li>
         <li>Date picker shows all available showtimes from the movie list, plus a custom date/time option</li>
+        <li>Movies stay visible for 30 days after their last imported showtime (cinemas often add new dates)</li>
       </ul>
     </div>
 
     <div class="help-section">
-      <h3>v2.2 &mdash; 7 April 2026</h3>
+      <h3>v2.3 &mdash; 7 April 2026</h3>
       <ul>
         <li>Fixed: Month and Week calendar views now display all schedule entries correctly</li>
         <li>Schedule entries with nested showtime data are now normalized automatically</li>
@@ -1128,7 +1129,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <div class="help-section">
-      <h3>v2.2 &mdash; 6 April 2026</h3>
+      <h3>v2.3 &mdash; 6 April 2026</h3>
       <ul>
         <li>Server sync: data now saves to a Node.js backend and syncs across browsers/computers automatically</li>
         <li>On page load, data is pulled from server; on any change, data is pushed (debounced 2s)</li>
@@ -1142,7 +1143,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <div class="help-section">
-      <h3>v2.2 &mdash; 6 April 2026</h3>
+      <h3>v2.3 &mdash; 6 April 2026</h3>
       <ul>
         <li>Restored default cinema schedule with 10 movies (La Notte, A Touch of Sin, Pickpocket, In The Mood For Love, etc.)</li>
         <li>Schedule auto-seeds on first visit if empty</li>
@@ -8494,11 +8495,13 @@ function render() {
     if (gF && !(m.genre||'').toLowerCase().includes(gF.toLowerCase())) return false;
     if (cF && !(m.country||'').toLowerCase().includes(cF.toLowerCase())) return false;
     if (m.taste_score < minS) return false;
-    // Hide movies where ALL showtimes are in the past
-    const today = new Date().toISOString().slice(0,10);
+    // Hide movies where ALL showtimes are more than 30 days in the past
+    // (keeps movies visible even if imported showtimes passed — cinemas often add new dates)
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30);
+    const cutoffStr = cutoff.toISOString().slice(0,10);
     if (m.showtimes && m.showtimes.length > 0) {
-      const allPast = m.showtimes.every(s => s.date && s.date < today);
-      if (allPast) return false;
+      const allOld = m.showtimes.every(s => s.date && s.date < cutoffStr);
+      if (allOld) return false;
     }
     return true;
   });
