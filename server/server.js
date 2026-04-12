@@ -11,6 +11,7 @@ const DATA_DIR = path.join(__dirname, 'data');
 const APPS = {
   cinema: path.join(DATA_DIR, 'cinema-data.json'),
   modelbook: path.join(DATA_DIR, 'modelbook-data.json')
+  portfolio: path.join(DATA_DIR, 'portfolio-data.json')
 };
 
 // CORS — allow GitHub Pages and local dev
