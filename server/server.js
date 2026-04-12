@@ -10,7 +10,7 @@ const DATA_DIR = path.join(__dirname, 'data');
 // Supported apps and their data files
 const APPS = {
   cinema: path.join(DATA_DIR, 'cinema-data.json'),
-  modelbook: path.join(DATA_DIR, 'modelbook-data.json')
+  modelbook: path.join(DATA_DIR, 'modelbook-data.json'),
   portfolio: path.join(DATA_DIR, 'portfolio-data.json')
 };
 
