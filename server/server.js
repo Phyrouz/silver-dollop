@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const fetch = require('node-fetch');
+// Node 18+ has fetch built-in — no node-fetch needed
 
 const app = express();
 const PORT = process.env.PORT || 3002;
