@@ -263,28 +263,26 @@ app.get('/api/curzon-test', async (req, res) => {
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-GB,en;q=0.9'
     };
-    const apiHeaders = {
+    const testHeaders = {
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-      'Accept': 'application/json, */*',
-      'Accept-Language': 'en-GB,en;q=0.9',
-      'Referer': 'https://www.curzon.com/films/'
+      'Accept': 'text/html,application/xhtml+xml,*/*',
+      'Accept-Language': 'en-GB,en;q=0.9'
     };
-    const apis = [
-      'https://www.curzon.com/api/films',
-      'https://www.curzon.com/api/v1/films',
-      'https://www.curzon.com/api/v2/films',
-      'https://www.curzon.com/api/screenings?cinema=soho',
-      'https://www.curzon.com/api/v1/screenings?cinema=soho',
-      'https://www.curzon.com/api/performances?venueId=soho',
-      'https://api.curzon.com/films',
-      'https://api.curzon.com/v1/films',
+    const urls = [
+      'https://www.flicks.co.uk/cinema/curzon-soho/',
+      'https://www.flicks.co.uk/cinema/curzon-victoria/',
+      'https://www.imdb.com/showtimes/cinema/UK/ci0959606/',
+      'https://www.timeout.com/london/cinemas/curzon-soho',
     ];
     const results = [];
-    for (const url of apis) {
+    for (const url of urls) {
       try {
-        const r = await fetch(url, { headers: apiHeaders });
+        const r = await fetch(url, { headers: testHeaders });
         const text = await r.text();
-        results.push({ url, status: r.status, bodyLength: text.length, snippet: text.substring(0, 300) });
+        // Look for film title patterns in the response
+        const titleMatches = text.match(/<h[123][^>]*>([^<]{3,80})<\/h[123]>/gi) || [];
+        const filmTitles = titleMatches.slice(0, 10).map(m => m.replace(/<[^>]+>/g,'').trim());
+        results.push({ url, status: r.status, bodyLength: text.length, filmTitleSample: filmTitles });
       } catch(e) {
         results.push({ url, error: e.message });
       }
