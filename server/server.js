@@ -344,7 +344,7 @@ app.get('/api/curzon-test', async (req, res) => {
     const allResults = await Promise.all(lastChanceUrls.map(async ({ label, url, headers: extraHeaders }) => {
       try {
         const h = extraHeaders ? { ...testHeaders, ...extraHeaders } : testHeaders;
-        const r = await fetch(url, { headers: h });
+        const r = await fetch(url, { headers: h });  
         const text = await r.text();
         const { films, times } = extractFilms(text);
         // Also check for raw JSON
