@@ -323,18 +323,38 @@ app.get('/api/curzon-test', async (req, res) => {
       return { films: [...films].slice(0,20), times };
     }
 
-    const allResults = await Promise.all(allUrls.map(async ({ label, url }) => {
-      try {
-        const r = await fetch(url, { headers: testHeaders });
-        const text = await r.text();
-        const { films, times } = extractFilms(text);
-        return { label, status: r.status, bodyLength: text.length, films, times };
-      } catch(e) {
-        return { label, url, error: e.message };
+    // Deep dive into Google showtimes
+    const googleUrl = 'https://www.google.com/search?q=Curzon+Soho+London+showtimes+today&hl=en&gl=uk';
+    try {
+      const r = await fetch(googleUrl, { headers: testHeaders });
+      const text = await r.text();
+      // Extract all text around time patterns to find film context
+      const showtimeBlocks = [];
+      const timeRe = /\b([01]?\d|2[0-3]):[0-5]\d\b/g;
+      let m;
+      while ((m = timeRe.exec(text)) !== null) {
+        const start = Math.max(0, m.index - 300);
+        const end = Math.min(text.length, m.index + 100);
+        showtimeBlocks.push(text.substring(start, end).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim());
       }
-    }));
+      // Also look for JSON-LD structured data
+      const jsonLdMatches = text.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi) || [];
+      const jsonLd = jsonLdMatches.map(s => s.replace(/<[^>]+>/g,'').trim()).slice(0,5);
+      // Look for film title patterns near times
+      const filmPatterns = text.match(/(?:data-ved|data-entityname|jsname)[^>]*>([A-Z][^<]{3,60})</g) || [];
+      results.push({
+        label: 'google-deep',
+        status: r.status,
+        bodyLength: text.length,
+        showtimeBlocks: showtimeBlocks.slice(0,5),
+        jsonLd: jsonLd.slice(0,3),
+        filmPatterns: filmPatterns.slice(0,10)
+      });
+    } catch(e) {
+      results.push({ label: 'google-deep', error: e.message });
+    }
 
-    res.json(allResults);
+    res.json(results);
   } catch(e) {
     res.json({ error: e.message });
   }
