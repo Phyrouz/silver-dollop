@@ -280,36 +280,61 @@ app.get('/api/curzon-test', async (req, res) => {
       // Timeout
       { label: 'timeout-soho',     url: 'https://www.timeout.com/london/cinemas/curzon-soho' },
       { label: 'timeout-victoria', url: 'https://www.timeout.com/london/cinemas/curzon-victoria' },
+      // Cinelist
+      { label: 'cinelist-soho',    url: 'https://www.cinelist.co.uk/cinema/curzon-soho/' },
+      { label: 'cinelist-victoria',url: 'https://www.cinelist.co.uk/cinema/curzon-victoria/' },
+      // Cinelist alternative slugs
+      { label: 'cinelist-soho-alt',     url: 'https://www.cinelist.co.uk/cinemas/london/curzon-soho/' },
+      { label: 'cinelist-victoria-alt', url: 'https://www.cinelist.co.uk/cinemas/london/curzon-victoria/' },
+      // Flicks alternative Victoria slugs
+      { label: 'flicks-victoria-pimlico', url: 'https://www.flicks.co.uk/cinema/curzon-victoria-pimlico/' },
+      { label: 'flicks-victoria-london',  url: 'https://www.flicks.co.uk/cinema/curzon-victoria-london/' },
+      // Google Knowledge Graph structured data
+      { label: 'google-soho',     url: 'https://www.google.com/search?q=Curzon+Soho+showtimes&hl=en' },
     ];
 
-    for (const { label, url } of allUrls) {
+    const patterns = [
+      /href="[^"]*\/film\/([^"?]+)"[^>]*>\s*([^<]{2,80})\s*</gi,
+      /href="[^"]*\/movie\/([^"?]+)"[^>]*>\s*([^<]{2,80})\s*</gi,
+      /href="[^"]*\/movies\/([^"?]+)"[^>]*>\s*([^<]{2,80})\s*</gi,
+      /"title"\s*:\s*"([^"]{2,80})"/gi,
+      /itemprop="name"[^>]*>\s*([^<]{2,80})\s*</gi,
+      /class="[^"]*film[^"]*title[^"]*"[^>]*>\s*([^<]{2,80})\s*</gi,
+      /class="[^"]*movie[^"]*title[^"]*"[^>]*>\s*([^<]{2,80})\s*</gi,
+      /"name"\s*:\s*"([^"]{2,80})"/gi,
+      /data-film-title="([^"]{2,80})"/gi,
+      /data-title="([^"]{2,80})"/gi,
+      /<h2[^>]*>\s*([^<]{2,80})\s*<\/h2>/gi,
+      /<h3[^>]*>\s*([^<]{2,80})\s*<\/h3>/gi,
+    ];
+    const stopWords = /cookie|privacy|menu|search|sign|login|newsletter|about|contact|home|back|next|prev|more|see all|what's on|javascript|loading/i;
+
+    function extractFilms(text) {
+      const films = new Set();
+      for (const re of patterns) {
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(text)) !== null) {
+          const t = (m[2] || m[1]).trim().replace(/&amp;/g,'&').replace(/&#039;/g,"'");
+          if (t.length > 2 && t.length < 80 && !stopWords.test(t)) films.add(t);
+        }
+      }
+      const times = (text.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/g) || []).filter(t => !['00:00','01:00','00:01'].includes(t)).slice(0,15);
+      return { films: [...films].slice(0,20), times };
+    }
+
+    const allResults = await Promise.all(allUrls.map(async ({ label, url }) => {
       try {
         const r = await fetch(url, { headers: testHeaders });
         const text = await r.text();
-        // Try multiple film link patterns
-        const patterns = [
-          /href="[^"]*\/film\/([^"?]+)"[^>]*>\s*([^<]{2,80})\s*</gi,
-          /href="[^"]*\/movie\/([^"?]+)"[^>]*>\s*([^<]{2,80})\s*</gi,
-          /href="[^"]*\/movies\/([^"?]+)"[^>]*>\s*([^<]{2,80})\s*</gi,
-          /"title"\s*:\s*"([^"]{2,80})"/gi,
-          /itemprop="name"[^>]*>\s*([^<]{2,80})\s*</gi,
-        ];
-        const films = new Set();
-        for (const re of patterns) {
-          let m;
-          while ((m = re.exec(text)) !== null) {
-            const t = (m[2] || m[1]).trim();
-            if (t.length > 2 && t.length < 80) films.add(t);
-          }
-        }
-        const times = (text.match(/\b\d{1,2}:\d{2}\b/g) || []).slice(0, 10);
-        results.push({ label, status: r.status, bodyLength: text.length, films: [...films].slice(0, 15), times });
+        const { films, times } = extractFilms(text);
+        return { label, status: r.status, bodyLength: text.length, films, times };
       } catch(e) {
-        results.push({ label, url, error: e.message });
+        return { label, url, error: e.message };
       }
-    }
+    }));
 
-    res.json(results);
+    res.json(allResults);
   } catch(e) {
     res.json({ error: e.message });
   }
