@@ -323,6 +323,42 @@ app.get('/api/curzon-test', async (req, res) => {
       return { films: [...films].slice(0,20), times };
     }
 
+    // Curzon plain-text scraper — extract film titles + showtimes from rendered text
+    try {
+      const venues = [
+        { name: 'Curzon Soho',     url: 'https://www.curzon.com/venue/curzon-soho-cinema/' },
+        { name: 'Curzon Victoria', url: 'https://www.curzon.com/venue/curzon-victoria-cinema/' },
+      ];
+      const venueResults = await Promise.all(venues.map(async ({ name, url }) => {
+        const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36', 'Accept': 'text/html', 'Accept-Language': 'en-GB,en;q=0.9' } });
+        const text = await r.text();
+        // Strip all tags and get plain text
+        const plain = text.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');
+        return { name, status: r.status, plainSnippet: plain.substring(0, 3000) };
+      }));
+      results.push({ label: 'curzon-venue-urls', venueResults });
+    } catch(e) { results.push({ label: 'curzon-venue-urls', error: e.message }); }
+
+    // Check for embedded JSON data in the Curzon page (Next.js / React SSR)
+    try {
+      const r = await fetch('https://www.curzon.com/films/', { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' } });
+      const text = await r.text();
+      // Next.js embeds all page data in __NEXT_DATA__
+      const nextData = text.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+      // Also check window.__data__, window.__STATE__, __INITIAL_STATE__
+      const windowData = text.match(/window\.__(?:data|state|DATA|STATE|INITIAL_STATE)__\s*=\s*(\{[\s\S]{0,5000})/i);
+      const inlineJson = text.match(/<script[^>]*>\s*(\{"films|"showings|"performances|"screenings)([\s\S]{0,3000})/i);
+      results.push({
+        label: 'curzon-next-data',
+        hasNextData: !!nextData,
+        nextDataSnippet: nextData ? nextData[1].substring(0, 1000) : null,
+        hasWindowData: !!windowData,
+        windowDataSnippet: windowData ? windowData[1].substring(0, 500) : null,
+        hasInlineJson: !!inlineJson,
+        inlineJsonSnippet: inlineJson ? inlineJson[0].substring(0, 500) : null,
+      });
+    } catch(e) { results.push({ label: 'curzon-next-data', error: e.message }); }
+
     const lastChanceUrls = [
       // Curzon RSS/XML feeds
       { label: 'curzon-rss',         url: 'https://www.curzon.com/feed/' },
@@ -344,7 +380,7 @@ app.get('/api/curzon-test', async (req, res) => {
     const allResults = await Promise.all(lastChanceUrls.map(async ({ label, url, headers: extraHeaders }) => {
       try {
         const h = extraHeaders ? { ...testHeaders, ...extraHeaders } : testHeaders;
-        const r = await fetch(url, { headers: h });  
+        const r = await fetch(url, { headers: h });
         const text = await r.text();
         const { films, times } = extractFilms(text);
         // Also check for raw JSON
