@@ -268,25 +268,49 @@ app.get('/api/curzon-test', async (req, res) => {
       'Accept': 'text/html,application/xhtml+xml,*/*',
       'Accept-Language': 'en-GB,en;q=0.9'
     };
-    const urls = [
-      'https://www.flicks.co.uk/cinema/curzon-soho/',
-      'https://www.flicks.co.uk/cinema/curzon-victoria/',
-      'https://www.imdb.com/showtimes/cinema/UK/ci0959606/',
-      'https://www.timeout.com/london/cinemas/curzon-soho',
-    ];
     const results = [];
-    for (const url of urls) {
-      try {
-        const r = await fetch(url, { headers: testHeaders });
-        const text = await r.text();
-        // Look for film title patterns in the response
-        const titleMatches = text.match(/<h[123][^>]*>([^<]{3,80})<\/h[123]>/gi) || [];
-        const filmTitles = titleMatches.slice(0, 10).map(m => m.replace(/<[^>]+>/g,'').trim());
-        results.push({ url, status: r.status, bodyLength: text.length, filmTitleSample: filmTitles });
-      } catch(e) {
-        results.push({ url, error: e.message });
+
+    // Deep-check Flicks Soho
+    try {
+      const r = await fetch('https://www.flicks.co.uk/cinema/curzon-soho/', { headers: testHeaders });
+      const text = await r.text();
+      // Extract all anchor text that looks like film titles (links to /film/ pages)
+      const filmLinks = [];
+      const filmRe = /href="\/film\/([^"]+)"[^>]*>([^<]{2,80})</gi;
+      let fm;
+      while ((fm = filmRe.exec(text)) !== null) {
+        filmLinks.push({ slug: fm[1], title: fm[2].trim() });
       }
-    }
+      // Also look for showtime patterns
+      const timeMatches = text.match(/\b\d{1,2}:\d{2}\b/g) || [];
+      // Look for date patterns
+      const dateMatches = text.match(/(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\s+\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*/gi) || [];
+      results.push({ source: 'flicks-soho', status: r.status, filmLinks: filmLinks.slice(0,15), times: timeMatches.slice(0,20), dates: dateMatches.slice(0,10) });
+    } catch(e) { results.push({ source: 'flicks-soho', error: e.message }); }
+
+    // Try Flicks Victoria with different slug
+    try {
+      const r = await fetch('https://www.flicks.co.uk/cinema/curzon-victoria-london/', { headers: testHeaders });
+      const text = await r.text();
+      const filmLinks = [];
+      const filmRe = /href="\/film\/([^"]+)"[^>]*>([^<]{2,80})</gi;
+      let fm;
+      while ((fm = filmRe.exec(text)) !== null) filmLinks.push({ slug: fm[1], title: fm[2].trim() });
+      results.push({ source: 'flicks-victoria-alt', status: r.status, bodyLength: text.length, filmLinks: filmLinks.slice(0,10) });
+    } catch(e) { results.push({ source: 'flicks-victoria-alt', error: e.message }); }
+
+    // Deep-check Timeout Soho
+    try {
+      const r = await fetch('https://www.timeout.com/london/cinemas/curzon-soho', { headers: testHeaders });
+      const text = await r.text();
+      const filmLinks = [];
+      const filmRe = /href="[^"]*\/movies\/[^"]*"[^>]*>([^<]{2,80})</gi;
+      let fm;
+      while ((fm = filmRe.exec(text)) !== null) filmLinks.push(fm[1].trim());
+      const timeMatches = text.match(/\b\d{1,2}:\d{2}\s*(?:am|pm)?\b/gi) || [];
+      results.push({ source: 'timeout-soho', status: r.status, filmLinks: [...new Set(filmLinks)].slice(0,15), times: timeMatches.slice(0,20) });
+    } catch(e) { results.push({ source: 'timeout-soho', error: e.message }); }
+
     res.json(results);
   } catch(e) {
     res.json({ error: e.message });
