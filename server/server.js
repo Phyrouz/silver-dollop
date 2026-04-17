@@ -323,38 +323,40 @@ app.get('/api/curzon-test', async (req, res) => {
       return { films: [...films].slice(0,20), times };
     }
 
-    // Deep dive into Google showtimes
-    const googleUrl = 'https://www.google.com/search?q=Curzon+Soho+London+showtimes+today&hl=en&gl=uk';
-    try {
-      const r = await fetch(googleUrl, { headers: testHeaders });
-      const text = await r.text();
-      // Extract all text around time patterns to find film context
-      const showtimeBlocks = [];
-      const timeRe = /\b([01]?\d|2[0-3]):[0-5]\d\b/g;
-      let m;
-      while ((m = timeRe.exec(text)) !== null) {
-        const start = Math.max(0, m.index - 300);
-        const end = Math.min(text.length, m.index + 100);
-        showtimeBlocks.push(text.substring(start, end).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim());
-      }
-      // Also look for JSON-LD structured data
-      const jsonLdMatches = text.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi) || [];
-      const jsonLd = jsonLdMatches.map(s => s.replace(/<[^>]+>/g,'').trim()).slice(0,5);
-      // Look for film title patterns near times
-      const filmPatterns = text.match(/(?:data-ved|data-entityname|jsname)[^>]*>([A-Z][^<]{3,60})</g) || [];
-      results.push({
-        label: 'google-deep',
-        status: r.status,
-        bodyLength: text.length,
-        showtimeBlocks: showtimeBlocks.slice(0,5),
-        jsonLd: jsonLd.slice(0,3),
-        filmPatterns: filmPatterns.slice(0,10)
-      });
-    } catch(e) {
-      results.push({ label: 'google-deep', error: e.message });
-    }
+    const lastChanceUrls = [
+      // Curzon RSS/XML feeds
+      { label: 'curzon-rss',         url: 'https://www.curzon.com/feed/' },
+      { label: 'curzon-rss2',        url: 'https://www.curzon.com/rss/' },
+      { label: 'curzon-xml',         url: 'https://www.curzon.com/films/feed/' },
+      // Curzon app API (mobile apps often use a public JSON API)
+      { label: 'curzon-app-api',     url: 'https://api.curzon.com/v1/films' },
+      { label: 'curzon-app-api2',    url: 'https://app.curzon.com/api/films' },
+      // View-source of Curzon with different accept headers to get SSR content
+      { label: 'curzon-ssr',         url: 'https://www.curzon.com/films/', headers: { 'User-Agent': 'Googlebot/2.1 (+http://www.google.com/bot.html)', 'Accept': 'text/html' } },
+      // Whats-on aggregators
+      { label: 'ents24-soho',        url: 'https://www.ents24.com/london/cinema/curzon-soho' },
+      { label: 'ents24-victoria',    url: 'https://www.ents24.com/london/cinema/curzon-victoria' },
+      { label: 'designmynight-soho', url: 'https://www.designmynight.com/london/cinema/soho/curzon-soho' },
+      // Curzon direct with Googlebot UA
+      { label: 'curzon-soho-googlebot', url: 'https://www.curzon.com/venue/curzon-soho/', headers: { 'User-Agent': 'Googlebot/2.1 (+http://www.google.com/bot.html)' } },
+    ];
 
-    res.json(results);
+    const allResults = await Promise.all(lastChanceUrls.map(async ({ label, url, headers: extraHeaders }) => {
+      try {
+        const h = extraHeaders ? { ...testHeaders, ...extraHeaders } : testHeaders;
+        const r = await fetch(url, { headers: h });
+        const text = await r.text();
+        const { films, times } = extractFilms(text);
+        // Also check for raw JSON
+        let json = null;
+        try { json = JSON.parse(text); } catch(e) {}
+        return { label, status: r.status, bodyLength: text.length, films, times, isJson: !!json, jsonSnippet: json ? JSON.stringify(json).substring(0,300) : null };
+      } catch(e) {
+        return { label, url, error: e.message };
+      }
+    }));
+
+    res.json(allResults);
   } catch(e) {
     res.json({ error: e.message });
   }
