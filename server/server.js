@@ -263,19 +263,31 @@ app.get('/api/curzon-test', async (req, res) => {
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-GB,en;q=0.9'
     };
-    // Try multiple possible URL patterns
-    const urls = [
-      'https://www.curzon.com/cinemas/curzon-soho/',
-      'https://www.curzon.com/cinema/curzon-soho/',
-      'https://www.curzon.com/whats-on/?cinema=curzon-soho',
-      'https://www.curzon.com/films/?cinema=soho',
-      'https://www.curzon.com/films/',
+    const apiHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+      'Accept': 'application/json, */*',
+      'Accept-Language': 'en-GB,en;q=0.9',
+      'Referer': 'https://www.curzon.com/films/'
+    };
+    const apis = [
+      'https://www.curzon.com/api/films',
+      'https://www.curzon.com/api/v1/films',
+      'https://www.curzon.com/api/v2/films',
+      'https://www.curzon.com/api/screenings?cinema=soho',
+      'https://www.curzon.com/api/v1/screenings?cinema=soho',
+      'https://www.curzon.com/api/performances?venueId=soho',
+      'https://api.curzon.com/films',
+      'https://api.curzon.com/v1/films',
     ];
     const results = [];
-    for (const url of urls) {
-      const r = await fetch(url, { headers });
-      const text = await r.text();
-      results.push({ url, status: r.status, bodyLength: text.length, snippet: text.substring(0, 200) });
+    for (const url of apis) {
+      try {
+        const r = await fetch(url, { headers: apiHeaders });
+        const text = await r.text();
+        results.push({ url, status: r.status, bodyLength: text.length, snippet: text.substring(0, 300) });
+      } catch(e) {
+        results.push({ url, error: e.message });
+      }
     }
     res.json(results);
   } catch(e) {
