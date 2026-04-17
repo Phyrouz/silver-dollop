@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v2.6</title>
+<title>Cinema Aggregator v2.8</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -129,6 +129,15 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 .score-slider { display: flex; align-items: center; gap: 0.5rem; }
 .score-slider label { color: var(--muted); font-size: 0.8rem; font-weight: 500; }
 .score-slider input[type=range] { width: 110px; accent-color: var(--accent); }
+.date-range-filter { display: flex; align-items: center; gap: 0.4rem; }
+.date-range-filter label { color: var(--muted); font-size: 0.8rem; font-weight: 500; white-space: nowrap; }
+.date-range-filter input[type=date] {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  padding: 0.4rem 0.5rem; border-radius: 6px; font-size: 0.8rem; font-family: 'Inter', sans-serif;
+}
+.date-range-filter input[type=date]:focus { outline: none; border-color: var(--accent); }
+.date-range-clear { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.85rem; padding: 0.3rem 0.4rem; border-radius: 4px; }
+.date-range-clear:hover { color: var(--red); background: rgba(192,57,43,0.08); }
 
 /* ===== CONTENT ===== */
 .content { padding: 1.5rem 3rem; max-width: 1400px; margin: 0 auto; }
@@ -197,6 +206,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 .venue-bfi { background: #e8f5e9; color: var(--green); }
 .venue-pcc { background: #fce4ec; color: var(--red); }
 .venue-garden { background: #e3f2fd; color: var(--blue); }
+.venue-curzon { background: #fff3e0; color: #e65100; }
 .showtimes { font-size: 0.75rem; color: var(--muted); margin-top: 0.4rem; }
 .st-item {
   display: inline-block; background: var(--surface2); padding: 0.12rem 0.45rem;
@@ -414,6 +424,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 .cal-event.venue-bfi { background:#e8f5e9; color:#2d7a3a; border-left:3px solid #2d7a3a; }
 .cal-event.venue-pcc { background:#fce4ec; color:#ad1457; border-left:3px solid #ad1457; }
 .cal-event.venue-garden { background:#e3f2fd; color:#1565c0; border-left:3px solid #1565c0; }
+.cal-event.venue-curzon { background:#fff3e0; color:#e65100; border-left:3px solid #e65100; }
 .cal-event.venue-other { background:#f3e5f5; color:#6a1b9a; border-left:3px solid #6a1b9a; }
 .cal-event.booked { border-left-color:var(--green); outline:1px solid var(--green); }
 .cal-event.past-event { opacity:.4; }
@@ -454,6 +465,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 .cal-week-event.venue-bfi { background:#c8e6c9; color:#1b5e20; }
 .cal-week-event.venue-pcc { background:#f8bbd0; color:#880e4f; }
 .cal-week-event.venue-garden { background:#bbdefb; color:#0d47a1; }
+.cal-week-event.venue-curzon { background:#ffe0b2; color:#bf360c; }
 .cal-week-event.venue-other { background:#e1bee7; color:#4a148c; }
 .cal-week-event.booked { outline:2px solid var(--green); }
 .cal-week-event.past-event { opacity:.4; }
@@ -750,7 +762,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v2.6</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v2.8</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -780,6 +792,13 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
   <div class="score-slider">
     <label>Min Score: <span id="score-val">1</span></label>
     <input type="range" id="score-filter" min="1" max="10" value="1">
+  </div>
+  <div class="date-range-filter">
+    <label>From</label>
+    <input type="date" id="date-from" title="Show movies with showtimes from this date">
+    <label>To</label>
+    <input type="date" id="date-to" title="Show movies with showtimes up to this date">
+    <button class="date-range-clear" id="date-range-clear" title="Clear date filter">&times;</button>
   </div>
 </div>
 
@@ -948,6 +967,10 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     <div class="source-section">
       <h3>Upload BFI Programme (PDF)</h3>
       <p>Upload a BFI Southbank programme guide PDF. Movies will be extracted automatically.</p>
+      <div id="bfi-reminder" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:0.6rem 0.9rem;margin-bottom:0.75rem;font-size:0.85rem;color:#7a5800;">
+        &#128197; <strong>Monthly reminder:</strong> A new BFI programme is usually out at the start of the month. Time to upload the latest PDF!
+        <button onclick="document.getElementById('bfi-reminder').style.display='none';localStorage.setItem('bfi_reminder_dismissed',new Date().toISOString());" style="margin-left:0.75rem;background:none;border:none;cursor:pointer;font-size:1rem;line-height:1;">&#10005;</button>
+      </div>
       <label class="source-btn source-btn-primary" for="pdf-upload">Upload PDF</label>
       <input type="file" id="pdf-upload" class="source-file-input" accept=".pdf">
       <div id="pdf-status" class="source-status"></div>
@@ -955,9 +978,17 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
     <div class="source-section">
       <h3>Fetch Cinema Websites</h3>
-      <p>Fetch current listings from Prince Charles Cinema or The Garden Cinema.</p>
-      <button class="source-btn source-btn-primary" id="fetch-pcc">Prince Charles Cinema</button>
-      <button class="source-btn source-btn-outline" id="fetch-garden">The Garden Cinema</button>
+      <p>Fetch current listings from Prince Charles Cinema, The Garden Cinema, or Curzon cinemas.</p>
+      <div id="fetch-reminder" style="display:none;background:#e8f4fd;border:1px solid #2196f3;border-radius:6px;padding:0.6rem 0.9rem;margin-bottom:0.75rem;font-size:0.85rem;color:#0d47a1;">
+        &#128337; <strong>Weekly reminder:</strong> It's been over a week since you last fetched cinema listings. Refresh now to catch new screenings!
+        <button onclick="document.getElementById('fetch-reminder').style.display='none';localStorage.setItem('fetch_reminder_dismissed',new Date().toISOString());" style="margin-left:0.75rem;background:none;border:none;cursor:pointer;font-size:1rem;line-height:1;">&#10005;</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
+        <button class="source-btn source-btn-primary" id="fetch-pcc">Prince Charles Cinema</button>
+        <button class="source-btn source-btn-outline" id="fetch-garden">The Garden Cinema</button>
+        <button class="source-btn source-btn-outline" id="fetch-curzon-soho" style="border-color:#e65100;color:#e65100;">Curzon Soho</button>
+        <button class="source-btn source-btn-outline" id="fetch-curzon-victoria" style="border-color:#e65100;color:#e65100;">Curzon Victoria</button>
+      </div>
       <div style="margin-top:0.75rem;">
         <p>Or paste any cinema URL:</p>
         <div class="source-url-row">
@@ -1110,6 +1141,25 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <h2 style="margin-top:2rem;">Version History</h2>
+
+    <div class="help-section">
+      <h3>v2.8 &mdash; 17 April 2026</h3>
+      <ul>
+        <li>Curzon Soho and Curzon Victoria scrapers: fetch films + dates + showtimes via server-side endpoint (bypasses Curzon's WAF block)</li>
+        <li>Curzon venue colour (orange) added across all tabs: cards, calendar month, calendar week</li>
+        <li>Weekly reminder banner in Import tab: appears when listings haven't been refreshed in 7+ days</li>
+        <li>Monthly BFI reminder banner: appears on days 1–5 of each month to upload the new BFI PDF programme</li>
+        <li>PCC and Garden Cinema fetches now also update the last-fetch timestamp</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v2.7 &mdash; 15 April 2026</h3>
+      <ul>
+        <li>Date range filter in All Movies tab: pick a From/To date to show only movies with showtimes in that period</li>
+        <li>Clear button (&times;) to reset date filter quickly</li>
+      </ul>
+    </div>
 
     <div class="help-section">
       <h3>v2.6 &mdash; 9 April 2026</h3>
@@ -8318,7 +8368,8 @@ function vc(venue) {
   if (venue.includes('BFI')) return 'venue-bfi';
   if (venue.includes('Prince')) return 'venue-pcc';
   if (venue.includes('Garden')) return 'venue-garden';
-  return 'venue-bfi';
+  if (venue.includes('Curzon')) return 'venue-curzon';
+  return 'venue-other';
 }
 function tc(s) { return s >= 7 ? 'taste-high' : s >= 4 ? 'taste-mid' : 'taste-low'; }
 
@@ -8492,6 +8543,8 @@ function render() {
   const cF = document.getElementById('country-filter').value;
   const minS = +document.getElementById('score-filter').value;
   document.getElementById('score-val').textContent = minS;
+  const dateFrom = document.getElementById('date-from').value;
+  const dateTo = document.getElementById('date-to').value;
 
   let f = MOVIES.filter(m => {
     if (search && !(m.title+' '+m.director+' '+m.genre+' '+m.summary+' '+m.venue).toLowerCase().includes(search)) return false;
@@ -8499,6 +8552,17 @@ function render() {
     if (gF && !(m.genre||'').toLowerCase().includes(gF.toLowerCase())) return false;
     if (cF && !(m.country||'').toLowerCase().includes(cF.toLowerCase())) return false;
     if (m.taste_score < minS) return false;
+    // Date range filter: only show movies with at least one showtime in the selected range
+    if (dateFrom || dateTo) {
+      if (!m.showtimes || m.showtimes.length === 0) return false;
+      const hasMatch = m.showtimes.some(s => {
+        if (!s.date) return false;
+        if (dateFrom && s.date < dateFrom) return false;
+        if (dateTo && s.date > dateTo) return false;
+        return true;
+      });
+      if (!hasMatch) return false;
+    }
     // Hide movies where ALL showtimes are more than 30 days in the past
     // (keeps movies visible even if imported showtimes passed — cinemas often add new dates)
     const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30);
@@ -8769,6 +8833,13 @@ document.getElementById('venue-filter').addEventListener('change', render);
 document.getElementById('genre-filter').addEventListener('change', render);
 document.getElementById('country-filter').addEventListener('change', render);
 document.getElementById('score-filter').addEventListener('input', render);
+document.getElementById('date-from').addEventListener('change', render);
+document.getElementById('date-to').addEventListener('change', render);
+document.getElementById('date-range-clear').addEventListener('click', () => {
+  document.getElementById('date-from').value = '';
+  document.getElementById('date-to').value = '';
+  render();
+});
 
 document.querySelectorAll('.sort-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -9034,12 +9105,6 @@ document.querySelectorAll('.tab').forEach(tab => {
     }
   }
 
-  document.getElementById('fetch-pcc').addEventListener('click', async function() {
-    await fetchPrinceCharlesCinema();
-  });
-  document.getElementById('fetch-garden').addEventListener('click', async function() {
-    await fetchGardenCinema();
-  });
   // --- Prince Charles Cinema dedicated scraper ---
   async function fetchPrinceCharlesCinema() {
     const statusId = 'web-status';
@@ -9363,6 +9428,101 @@ document.querySelectorAll('.tab').forEach(tab => {
       setStatus(statusId, 'Garden Cinema fetch failed: ' + err.message, 'error');
     }
   }
+
+  // --- Curzon scraper (via server-side endpoint) ---
+  async function fetchCurzonVenue(venueSlug, venueName) {
+    const statusId = 'web-status';
+    const API_BASE = 'https://silver-dollop-4zjb.onrender.com/api';
+    setStatus(statusId, 'Fetching ' + venueName + ' via server...', 'loading');
+    try {
+      const resp = await fetch(API_BASE + '/curzon/' + venueSlug);
+      if (!resp.ok) throw new Error('Server HTTP ' + resp.status);
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'Server error');
+
+      const parser = new DOMParser();
+      let added = 0, merged = 0;
+      data.films.forEach(m => {
+        const existing = MOVIES.find(em => em.title.toLowerCase() === m.title.toLowerCase());
+        if (existing) {
+          (m.showtimes || []).forEach(st => {
+            if (st.date && !existing.showtimes.some(es => es.date === st.date && es.time === st.time)) {
+              existing.showtimes.push(st);
+            }
+          });
+          if (!existing.director && m.director) existing.director = m.director;
+          if (!existing.duration && m.duration) existing.duration = m.duration;
+          if (!existing.summary && m.summary) existing.summary = m.summary;
+          merged++;
+        } else {
+          MOVIES.push(m);
+          added++;
+        }
+      });
+
+      // Save fetched movies to localStorage
+      localStorage.setItem('cinema_added_movies', JSON.stringify(MOVIES));
+      // Update last-fetch timestamp
+      localStorage.setItem('last_cinema_fetch', new Date().toISOString());
+
+      rescoreAll();
+      render();
+      setStatus(statusId, venueName + ': ' + data.count + ' films found, ' + added + ' new, ' + merged + ' updated. Total: ' + MOVIES.length, 'success');
+    } catch(err) {
+      setStatus(statusId, venueName + ' fetch failed: ' + err.message, 'error');
+    }
+  }
+
+  document.getElementById('fetch-curzon-soho').addEventListener('click', function() {
+    fetchCurzonVenue('curzon-soho', 'Curzon Soho');
+  });
+  document.getElementById('fetch-curzon-victoria').addEventListener('click', function() {
+    fetchCurzonVenue('curzon-victoria', 'Curzon Victoria');
+  });
+
+  // Update last-fetch timestamp for PCC and Garden too
+  const _origFetchPCC = fetchPrinceCharlesCinema;
+  const _origFetchGarden = fetchGardenCinema;
+
+  document.getElementById('fetch-pcc').addEventListener('click', async function() {
+    await fetchPrinceCharlesCinema();
+    localStorage.setItem('last_cinema_fetch', new Date().toISOString());
+  });
+  document.getElementById('fetch-garden').addEventListener('click', async function() {
+    await fetchGardenCinema();
+    localStorage.setItem('last_cinema_fetch', new Date().toISOString());
+  });
+
+  // --- Weekly fetch reminder ---
+  (function checkFetchReminder() {
+    const lastFetch = localStorage.getItem('last_cinema_fetch');
+    const dismissed = localStorage.getItem('fetch_reminder_dismissed');
+    const now = Date.now();
+    const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
+    // Show if never fetched, or last fetch > 7 days ago, and not dismissed this week
+    const fetchOld = !lastFetch || (now - new Date(lastFetch).getTime() > ONE_WEEK);
+    const dismissedOld = !dismissed || (now - new Date(dismissed).getTime() > ONE_WEEK);
+    if (fetchOld && dismissedOld) {
+      document.getElementById('fetch-reminder').style.display = 'block';
+    }
+  })();
+
+  // --- Monthly BFI reminder (1st–5th of each month) ---
+  (function checkBFIReminder() {
+    const dismissed = localStorage.getItem('bfi_reminder_dismissed');
+    const now = new Date();
+    const dayOfMonth = now.getDate();
+    // Show on days 1–5 of each month if not dismissed this month
+    if (dayOfMonth >= 1 && dayOfMonth <= 5) {
+      const dismissedDate = dismissed ? new Date(dismissed) : null;
+      const alreadyDismissedThisMonth = dismissedDate &&
+        dismissedDate.getMonth() === now.getMonth() &&
+        dismissedDate.getFullYear() === now.getFullYear();
+      if (!alreadyDismissedThisMonth) {
+        document.getElementById('bfi-reminder').style.display = 'block';
+      }
+    }
+  })();
 
   document.getElementById('fetch-custom').addEventListener('click', function() {
     const url = document.getElementById('custom-url').value.trim();
@@ -9749,6 +9909,7 @@ function _venueClass(venue) {
   if (v.includes('bfi') || v.includes('southbank')) return 'venue-bfi';
   if (v.includes('prince charles') || v.includes('pcc')) return 'venue-pcc';
   if (v.includes('garden')) return 'venue-garden';
+  if (v.includes('curzon')) return 'venue-curzon';
   return 'venue-other';
 }
 
