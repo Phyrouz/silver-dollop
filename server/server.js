@@ -323,21 +323,21 @@ app.get('/api/curzon-test', async (req, res) => {
       return { films: [...films].slice(0,20), times };
     }
 
-    // Curzon plain-text scraper — extract film titles + showtimes from rendered text
+    // Find showtime image URLs from Curzon page
     try {
-      const venues = [
-        { name: 'Curzon Soho',     url: 'https://www.curzon.com/venue/curzon-soho-cinema/' },
-        { name: 'Curzon Victoria', url: 'https://www.curzon.com/venue/curzon-victoria-cinema/' },
-      ];
-      const venueResults = await Promise.all(venues.map(async ({ name, url }) => {
-        const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36', 'Accept': 'text/html', 'Accept-Language': 'en-GB,en;q=0.9' } });
-        const text = await r.text();
-        // Strip all tags and get plain text
-        const plain = text.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');
-        return { name, status: r.status, plainSnippet: plain.substring(0, 3000) };
-      }));
-      results.push({ label: 'curzon-venue-urls', venueResults });
-    } catch(e) { results.push({ label: 'curzon-venue-urls', error: e.message }); }
+      const r = await fetch('https://www.curzon.com/venue/curzon-soho-cinema/', { headers: testHeaders });
+      const text = await r.text();
+      // Find all img tags and their src/alt attributes
+      const imgRe = /<img[^>]+src="([^"]+)"[^>]*(?:alt="([^"]*)")?[^>]*>/gi;
+      const imgs = [];
+      let im;
+      while ((im = imgRe.exec(text)) !== null) {
+        imgs.push({ src: im[1], alt: im[2] || '' });
+      }
+      // Also find any img with time-like alt text or src containing time/showtime
+      const timeImgs = imgs.filter(i => /\d{1,2}[:\.]\d{2}|showtime|time|session/i.test(i.src + i.alt));
+      results.push({ label: 'curzon-images', total: imgs.length, timeImgs, allImgSample: imgs.slice(0,20) });
+    } catch(e) { results.push({ label: 'curzon-images', error: e.message }); }
 
     // Check for embedded JSON data in the Curzon page (Next.js / React SSR)
     try {
