@@ -250,7 +250,24 @@ app.get('/api/curzon/:venue', async (req, res) => {
     const films = await scrapeCurzonVenue(req.params.venue);
     res.json({ ok: true, venue: req.params.venue, count: films.length, films });
   } catch(e) {
+    console.error('Curzon scrape error:', e.message);
     res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Curzon diagnostic — check what status code we get from their site
+app.get('/api/curzon-test', async (req, res) => {
+  try {
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-GB,en;q=0.9'
+    };
+    const r = await fetch('https://www.curzon.com/venue/curzon-soho/', { headers });
+    const text = await r.text();
+    res.json({ status: r.status, bodyLength: text.length, snippet: text.substring(0, 500) });
+  } catch(e) {
+    res.json({ error: e.message });
   }
 });
 
@@ -278,4 +295,3 @@ app.listen(PORT, () => {
     }
   });
 });
-  
