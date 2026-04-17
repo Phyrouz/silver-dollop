@@ -263,9 +263,21 @@ app.get('/api/curzon-test', async (req, res) => {
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-GB,en;q=0.9'
     };
-    const r = await fetch('https://www.curzon.com/venue/curzon-soho/', { headers });
-    const text = await r.text();
-    res.json({ status: r.status, bodyLength: text.length, snippet: text.substring(0, 500) });
+    // Try multiple possible URL patterns
+    const urls = [
+      'https://www.curzon.com/cinemas/curzon-soho/',
+      'https://www.curzon.com/cinema/curzon-soho/',
+      'https://www.curzon.com/whats-on/?cinema=curzon-soho',
+      'https://www.curzon.com/films/?cinema=soho',
+      'https://www.curzon.com/films/',
+    ];
+    const results = [];
+    for (const url of urls) {
+      const r = await fetch(url, { headers });
+      const text = await r.text();
+      results.push({ url, status: r.status, bodyLength: text.length, snippet: text.substring(0, 200) });
+    }
+    res.json(results);
   } catch(e) {
     res.json({ error: e.message });
   }
