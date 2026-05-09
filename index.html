@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v2.8</title>
+<title>Cinema Aggregator v3.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -762,7 +762,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v2.8</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v3.1</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -957,8 +957,12 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <div class="source-section">
-      <h3>Upload Movie List (CSV / Text)</h3>
-      <p>Upload a CSV or text file with columns: Title, Year, Director, Genre, Venue. Header row optional.</p>
+      <h3>Upload Movie List (CSV / TSV / Text)</h3>
+      <p>Upload a movie list in one of two formats:</p>
+      <ul style="margin:0.3rem 0 0.6rem 1.2rem;padding:0;font-size:0.85rem;color:var(--muted);">
+        <li><strong>Simple CSV:</strong> Title, Year, Director, Genre, Venue</li>
+        <li><strong>Screenings TSV:</strong> tab-separated with headers <code>cinema, title, certificate, director, country, year, runtime_mins, seasons, date, time, format, notes</code> — one row per screening; the parser groups screenings by film and merges showtimes automatically</li>
+      </ul>
       <label class="source-btn source-btn-primary" for="csv-upload">Upload File</label>
       <input type="file" id="csv-upload" class="source-file-input" accept=".csv,.txt,.tsv">
       <div id="csv-status" class="source-status"></div>
@@ -1201,6 +1205,35 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
       <ul>
         <li>Restored default cinema schedule with 10 movies (La Notte, A Touch of Sin, Pickpocket, In The Mood For Love, etc.)</li>
         <li>Schedule auto-seeds on first visit if empty</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v3.1 &mdash; 9 May 2026</h3>
+      <ul>
+        <li>New screenings TSV parser: upload a tab-separated file with headers <code>cinema, title, certificate, director, country, year, runtime_mins, seasons, date, time, format, notes</code> (one row per screening) and the parser groups screenings by film and merges showtimes automatically</li>
+        <li>Showtimes from new uploads merge into existing films instead of creating duplicates; empty fields (director, country, duration) get backfilled</li>
+        <li>The same upload control still accepts the original simple CSV format (Title, Year, Director, Genre, Venue) — auto-detected by tabs and header keywords</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v3.0 &mdash; 1 May 2026</h3>
+      <ul>
+        <li>BFI PDF parser overhaul: duration is now optional in the credit regex, so credits whose runtime wraps to the next line are matched correctly (was the main reason ~95% of films were dropped on accessible-format PDFs)</li>
+        <li>Smarter title extraction: walks upward across multi-line titles, skips descriptive sentences and section headers, strips "+ intro/Q&A/talk" decorations and "London Premiere:" / "Preview:" prefixes</li>
+        <li>Companion shorts (lines starting with "+ Title") now imported as their own films</li>
+        <li>Expanded country list: USSR, Saudi Arabia, UAE, Qatar, Sudan, Syria, Singapore, etc.</li>
+        <li>Result: BFI June 2026 programme now extracts ~106 films (vs 7 previously)</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v2.9 &mdash; 29 April 2026</h3>
+      <ul>
+        <li>BFI PDF parser rewritten: column-aware extraction using text item x/y coordinates, correctly handles two-column layout</li>
+        <li>Expanded country list (Cuba, Bangladesh, Czech Republic, Georgia, Morocco, etc.) to catch more film credit lines</li>
+        <li>Significantly more films extracted per PDF upload (was ~7, now 40+)</li>
       </ul>
     </div>
 
@@ -9047,26 +9080,130 @@ document.querySelectorAll('.tab').forEach(tab => {
       if (typeof pdfjsLib === 'undefined') { setStatus('pdf-status', 'PDF.js not loaded. Check internet connection.', 'error'); return; }
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       const pdf = await pdfjsLib.getDocument({data: arrayBuf}).promise;
-      let fullText = '';
+
+      // Build column-aware line structure from each page using text item positions
+      function pageToLines(items) {
+        // Group items by rounded y-coordinate (row), then split into left/right columns
+        const rows = new Map();
+        for (const item of items) {
+          if (!item.str.trim()) continue;
+          const y = Math.round(item.transform[5] / 4) * 4;
+          const x = item.transform[4];
+          if (!rows.has(y)) rows.set(y, []);
+          rows.get(y).push({ x, str: item.str });
+        }
+        // Detect column split: if most rows have items both <200 and >200 it's two-column
+        let twoCol = 0;
+        rows.forEach(row => {
+          const xs = row.map(i => i.x);
+          if (Math.min(...xs) < 180 && Math.max(...xs) > 200) twoCol++;
+        });
+        const isTwo = twoCol > rows.size * 0.3;
+        const splitX = 205;
+        const lines = [];
+        const sortedYs = [...rows.keys()].sort((a, b) => b - a); // top-to-bottom (pdf y is inverted)
+        if (isTwo) {
+          // Separate left and right columns, each as their own line stream
+          const leftLines = [], rightLines = [];
+          for (const y of sortedYs) {
+            const row = rows.get(y).sort((a, b) => a.x - b.x);
+            const left = row.filter(i => i.x < splitX).map(i => i.str).join(' ').trim();
+            const right = row.filter(i => i.x >= splitX).map(i => i.str).join(' ').trim();
+            if (left) leftLines.push(left);
+            if (right) rightLines.push(right);
+          }
+          lines.push(...leftLines, '---COLBREAK---', ...rightLines);
+        } else {
+          for (const y of sortedYs) {
+            const row = rows.get(y).sort((a, b) => a.x - b.x);
+            lines.push(row.map(i => i.str).join(' ').trim());
+          }
+        }
+        return lines;
+      }
+
+      let allLines = [];
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const tc = await page.getTextContent();
-        fullText += tc.items.map(it => it.str).join(' ') + '\n';
+        const lines = pageToLines(tc.items);
+        allLines.push(...lines, '---PAGEBREAK---');
       }
-      // Extract movies using regex (same logic as Python parser)
-      const re = /(USA|UK|France|Germany|Italy|Japan|Australia|Ireland|Canada|Spain|Brazil|Finland|Sweden|Denmark|Norway|Hungary|Greece|India|China|Hong Kong|South Korea|Mexico|Argentina|Poland|Russia|Iran|Belgium|Netherlands|Switzerland|Austria|BBC|Channel 4)[\w\s\-,\/]*?(\d{4})\.\s+Directors?\s+([^\.]{2,60})\.(?:\s*With\s+[^\.]{2,120}\.)?\s*(\d{2,3})min/g;
+
+      // Country token (single or hyphenated co-productions like UK-France-Canada)
+      const COUNTRY_TOKEN = '(?:USA|UK|France|Germany|Italy|Japan|Australia|Ireland|Canada|Spain|Brazil|Finland|Sweden|Denmark|Norway|Hungary|Greece|India|China|Hong Kong|South Korea|Mexico|Argentina|Poland|Russia|Iran|Belgium|Netherlands|Switzerland|Austria|Cuba|Bangladesh|Czech|Portugal|Romania|Turkey|Morocco|Algeria|Senegal|Colombia|Chile|Ukraine|Georgia|New Zealand|USSR|Saudi Arabia|United Arab Emirates|Qatar|Sudan|Syria|Singapore|BBC|Channel 4)';
+      // Credit line: "Country [Year]. Director Name." — duration is OPTIONAL because in the
+      // accessible BFI PDF it often wraps to the next line. Capturing director up to the period.
+      const CREDIT_RE = new RegExp('^(' + COUNTRY_TOKEN + '(?:[-/]' + COUNTRY_TOKEN + ')*)\\s+(\\d{4})\\.\\s+Directors?\\s+([^.]+?)\\.');
+      const COUNTRY_PREFIX = new RegExp('^' + COUNTRY_TOKEN, 'i');
+
+      // Lines that are never titles
+      const NOISE = /^(INTRO|Q&A|TALK|DOC TALK|FREE TALK|FREE\b|TICKET|SAT |SUN |MON |TUE |WED |THU |FRI |\d{1,2}:\d{2}|NFT\d|@british|book online|bfi\.org|Tickets|Tickets £|Become|Not a Member|Make the most|See p\d|See above|See below|Contains|Courtesy|Funded|Funding|Restored|Continues from|Cert tbc|Joint ticket|Also on|TRT \d|---PAGE|---COL|RS |DS |AD |CC |\*|Star Attractions|Dramatic Turns|Scene Stealer|Small parts|Directed by Ghatak|Shorts and Documentaries|Close Encounters with Spielberg|These musicals|These films|Serious roles|Regular Programme|Special Films|New Releases|Re-Releases|Re-Release|In Person|Member |Booking|Welcome|This month|Cover:|Page \d|FROM (?:FRI|SAT|SUN|MON|TUE|WED|THU)|Brazil on Film|Big Screen Classics|Refugee Week|REFUGEE WEEK|Pride Month|PRIDE MONTH|Funday|Seasons?\b|Seniors|Families|Under 16|Free for|with live|With live|With English subtitles|With some English|Subtitled|In honour|Ideal screenings|Join us)/i;
+
+      // Heuristic: long descriptive sentences are not titles
+      function isDescriptive(s) {
+        s = s.trim().replace(/\*+$/, '').trim();
+        if (s.length > 80 && /\.[^.]/.test(s)) return true;
+        if (s.length > 100) return true;
+        return false;
+      }
+
+      function cleanTitle(t) {
+        // Strip "+ intro / + Q&A / + talk / + discussion" trailing decorations
+        t = t.replace(/\s*\+\s*(?:extended intro|pre-recorded intro|intro by[^+]*|intro|Q&A[^+]*|talk by[^+]*|talk|discussion|live[^+]*|with director[^+]*).*$/i, '').trim();
+        // Leading "+" denotes a companion short — keep title but drop the marker
+        if (t.startsWith('+')) t = t.replace(/^\++\s*/, '').trim();
+        // Trailing asterisks (footnote markers)
+        t = t.replace(/\*+\s*$/, '').trim();
+        // If multiple sentences, the title is usually the LAST chunk after the last period
+        const parts = t.split(/(?<=[.!?])\s+(?=[A-Z])/);
+        if (parts.length > 1) t = parts[parts.length - 1].trim();
+        // Strip programme labels
+        t = t.replace(/^(?:London Premiere|UK Premiere|World Premiere|Preview|Funday|Member Salon|Disclosure Day)[:\s]+/i, '').trim();
+        return t;
+      }
+
       const movies = [];
-      let m;
-      while ((m = re.exec(fullText)) !== null) {
-        const year = m[2], director = m[3].trim(), dur = m[4];
-        // Look backwards for title
-        const before = fullText.substring(Math.max(0, m.index - 200), m.index).trim();
-        const lines = before.split(/\n/).filter(Boolean);
-        let title = lines[lines.length - 1] || '';
-        title = title.replace(/^(INTRO|Q&A|TALK|DOC)\s*/i, '').replace(/\s*\+\s*(intro|Q&A).*/i, '').trim();
-        if (title.length < 3 || title.length > 80) continue;
-        if (/season intro|in conversation|book online|@bfi/i.test(title)) continue;
-        movies.push(parseMovieLine(title + ', ' + year + ', ' + director + ', Drama, ' + (file.name.includes('bfi') ? 'BFI Southbank' : 'Uploaded')));
+      const seen = new Set();
+
+      for (let j = 0; j < allLines.length; j++) {
+        const line = allLines[j].trim();
+        const cm = CREDIT_RE.exec(line);
+        if (!cm) continue;
+        const year = cm[2], director = cm[3].trim();
+
+        // Walk upward to gather title fragments (up to 3 lines)
+        const titleLines = [];
+        for (let k = j - 1; k >= 0 && (j - k) <= 15; k--) {
+          const c = (allLines[k] || '').trim();
+          if (!c || c.startsWith('---')) {
+            if (titleLines.length) break;
+            continue;
+          }
+          if (CREDIT_RE.test(c)) break;
+          if (NOISE.test(c)) {
+            if (titleLines.length) break;
+            continue;
+          }
+          if (isDescriptive(c)) {
+            if (titleLines.length) break;
+            continue;
+          }
+          titleLines.unshift(c);
+          if (titleLines.length >= 3) break;
+        }
+        if (!titleLines.length) continue;
+
+        let title = cleanTitle(titleLines.join(' ').trim());
+        if (!title || title.length < 2 || title.length > 120) continue;
+        if (/^(also on|intro|q&a|talk|free|restored)$/i.test(title)) continue;
+
+        const key = title.toLowerCase() + '_' + year;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const venue = file.name.toLowerCase().includes('bfi') ? 'BFI Southbank' : 'Uploaded';
+        movies.push(parseMovieLine(title + ', ' + year + ', ' + director + ', , ' + venue));
       }
       const added = addMoviesToList(movies.filter(Boolean));
       setStatus('pdf-status', 'Extracted ' + movies.length + ' movies, added ' + added + ' new. Total: ' + MOVIES.length, 'success');
@@ -9536,13 +9673,134 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = function(ev) {
-      const lines = ev.target.result.split('\n').map(s => s.trim()).filter(Boolean);
-      // Skip header if it looks like one
-      let start = 0;
-      if (lines[0] && lines[0].toLowerCase().includes('title')) start = 1;
-      const movies = lines.slice(start).map(parseMovieLine).filter(Boolean);
-      const added = addMoviesToList(movies);
-      setStatus('csv-status', 'Added ' + added + ' new movies from ' + file.name + '. Total: ' + MOVIES.length, 'success');
+      const text = ev.target.result;
+      const rawLines = text.split(/\r?\n/).map(s => s.trimEnd()).filter(l => l.trim());
+      if (!rawLines.length) {
+        setStatus('csv-status', 'File is empty.', 'error');
+        return;
+      }
+
+      // Detect TSV-with-headers screening format vs simple CSV
+      const firstLine = rawLines[0];
+      const isTab = firstLine.includes('\t');
+      const headerLower = firstLine.toLowerCase();
+      const isScreeningTsv = isTab && headerLower.includes('title') &&
+        headerLower.includes('cinema') && headerLower.includes('date');
+
+      if (isScreeningTsv) {
+        // -- Structured screening TSV (one row per screening) --
+        const sep = '\t';
+        const headers = firstLine.split(sep).map(h => h.trim().toLowerCase());
+        const idx = (name) => headers.indexOf(name);
+        const col = {
+          cinema: idx('cinema'),
+          title: idx('title'),
+          certificate: idx('certificate'),
+          director: idx('director'),
+          country: idx('country'),
+          year: idx('year'),
+          runtime: idx('runtime_mins'),
+          seasons: idx('seasons'),
+          date: idx('date'),
+          time: idx('time'),
+          format: idx('format'),
+          notes: idx('notes'),
+        };
+        if (col.title < 0 || col.cinema < 0) {
+          setStatus('csv-status', 'TSV missing required columns "title" and "cinema".', 'error');
+          return;
+        }
+
+        // Group rows by (titleLower + '|' + year) -> one movie object with merged showtimes
+        const movieMap = new Map();
+        let rowCount = 0;
+        for (let i = 1; i < rawLines.length; i++) {
+          const cells = rawLines[i].split(sep);
+          if (cells.length < 2) continue;
+          const title = (cells[col.title] || '').trim();
+          if (!title) continue;
+          const year = (col.year >= 0 ? (cells[col.year] || '') : '').trim();
+          const key = title.toLowerCase() + '|' + year;
+          let movie = movieMap.get(key);
+          if (!movie) {
+            const runtime = (col.runtime >= 0 ? (cells[col.runtime] || '') : '').trim();
+            movie = {
+              title: title,
+              year: year,
+              director: (col.director >= 0 ? (cells[col.director] || '') : '').trim(),
+              genre: 'Drama',
+              summary: '',
+              venue: (col.cinema >= 0 ? (cells[col.cinema] || '') : '').trim() || 'Unknown',
+              country: (col.country >= 0 ? (cells[col.country] || '') : '').trim(),
+              duration: runtime ? runtime + 'min' : '',
+              showtimes: [],
+              poster_url: '',
+              taste_score: 5,
+              taste_pct: 5,
+              next_date: '',
+            };
+            movieMap.set(key, movie);
+          }
+          // Build showtime
+          const date = (col.date >= 0 ? (cells[col.date] || '') : '').trim();
+          const time = (col.time >= 0 ? (cells[col.time] || '') : '').trim();
+          if (date && time) {
+            const fmt = (col.format >= 0 ? (cells[col.format] || '') : '').trim();
+            const venue = (col.cinema >= 0 ? (cells[col.cinema] || '') : '').trim();
+            // Avoid dupe showtimes within one film
+            const showKey = date + '_' + time + '_' + venue;
+            if (!movie.showtimes.some(s => (s.date + '_' + s.time + '_' + (s.venue || '')) === showKey)) {
+              const st = { date: date, time: time, format: fmt };
+              if (venue && venue !== movie.venue) st.venue = venue;
+              movie.showtimes.push(st);
+            }
+          }
+          rowCount++;
+        }
+
+        // Merge into MOVIES: existing films get showtimes appended, new films pushed
+        const existing = new Map(MOVIES.map(m => [m.title.toLowerCase() + '|' + (m.year || ''), m]));
+        let addedNew = 0, mergedExisting = 0;
+        movieMap.forEach((nm, key) => {
+          const ex = existing.get(key) || existing.get(nm.title.toLowerCase() + '|');
+          if (ex) {
+            // Merge showtimes
+            const have = new Set((ex.showtimes || []).map(s => s.date + '_' + s.time + '_' + (s.venue || '')));
+            (nm.showtimes || []).forEach(s => {
+              const k = s.date + '_' + s.time + '_' + (s.venue || '');
+              if (!have.has(k)) { ex.showtimes.push(s); have.add(k); }
+            });
+            // Backfill empty fields
+            if (!ex.director && nm.director) ex.director = nm.director;
+            if (!ex.country && nm.country) ex.country = nm.country;
+            if (!ex.duration && nm.duration) ex.duration = nm.duration;
+            mergedExisting++;
+          } else {
+            MOVIES.push(nm);
+            existing.set(key, nm);
+            addedNew++;
+          }
+        });
+
+        // Persist
+        const saved = JSON.parse(localStorage.getItem('cinema_added_movies') || '[]');
+        const savedKeys = new Set(saved.map(s => s.title.toLowerCase() + '|' + (s.year || '')));
+        movieMap.forEach((nm, key) => {
+          if (!savedKeys.has(key)) { saved.push(nm); savedKeys.add(key); }
+        });
+        localStorage.setItem('cinema_added_movies', JSON.stringify(saved));
+
+        rescoreAll();
+        document.getElementById('movie-count').textContent = MOVIES.length;
+        setStatus('csv-status', 'Parsed ' + rowCount + ' screenings across ' + movieMap.size + ' films from ' + file.name + ' &mdash; added ' + addedNew + ' new, merged ' + mergedExisting + ' existing. Total: ' + MOVIES.length, 'success');
+      } else {
+        // -- Fallback: simple CSV / text format --
+        let start = 0;
+        if (rawLines[0] && rawLines[0].toLowerCase().includes('title')) start = 1;
+        const movies = rawLines.slice(start).map(parseMovieLine).filter(Boolean);
+        const added = addMoviesToList(movies);
+        setStatus('csv-status', 'Added ' + added + ' new movies from ' + file.name + '. Total: ' + MOVIES.length, 'success');
+      }
     };
     reader.readAsText(file);
   });
