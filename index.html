@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v3.1</title>
+<title>Cinema Aggregator v3.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -762,7 +762,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v3.1</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v3.2</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1209,6 +1209,17 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <div class="help-section">
+      <h3>v3.2 &mdash; 9 May 2026</h3>
+      <ul>
+        <li>Fixed cross-device sync: Render free dynos sleep after ~15min of inactivity and need 30-60s to wake; the previous 5-second pull timeout always gave up before the dyno was ready, leaving secondary devices with no data</li>
+        <li>Sync now uses a two-attempt strategy (10s, then 60s) so cold starts succeed automatically instead of falling back to local-only</li>
+        <li>Push (auto and manual) uses the same retry pattern, so uploads from one device reliably reach the server</li>
+        <li>Sync status indicator turns amber while pushing/pulling and shows the underlying error in its tooltip when offline</li>
+        <li>Manual Pull/Push buttons now show a "server may take ~30-60s to wake up if idle" hint while waiting</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
       <h3>v3.1 &mdash; 9 May 2026</h3>
       <ul>
         <li>New screenings TSV parser: upload a tab-separated file with headers <code>cinema, title, certificate, director, country, year, runtime_mins, seasons, date, time, format, notes</code> (one row per screening) and the parser groups screenings by film and merges showtimes automatically</li>
@@ -1362,48 +1373,80 @@ let _syncTimer = null;
 let _serverAvailable = false;
 let _initialSyncDone = false;
 
+// Helper: fetch with a custom timeout (Render free dynos need 30-60s to wake)
+function _fetchWithTimeout(url, opts, timeoutMs) {
+  return Promise.race([
+    fetch(url, opts),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout after ' + timeoutMs + 'ms')), timeoutMs))
+  ]);
+}
+
+// Push with retry (the first request may wake a sleeping Render dyno; retry once after a delay)
+async function _pushOnce(data, timeoutMs) {
+  return await _fetchWithTimeout(API_BASE + '/data', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }, timeoutMs);
+}
+
 // Push all localStorage cinema data to server (debounced)
 function _syncToServer() {
   if (!API_BASE) return;
   clearTimeout(_syncTimer);
   _syncTimer = setTimeout(async () => {
-    try {
-      const data = _getAllCinemaData();
-      const resp = await fetch(API_BASE + '/data', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      if (resp.ok) {
-        _serverAvailable = true;
-        const syncDot = document.getElementById('sync-status');
-        if (syncDot) { syncDot.title = 'Synced ' + new Date().toLocaleTimeString(); syncDot.style.background = '#2d7a3a'; }
+    const syncDot = document.getElementById('sync-status');
+    if (syncDot) { syncDot.title = 'Pushing...'; syncDot.style.background = '#e8a33a'; }
+    const data = _getAllCinemaData();
+    // Try with a short timeout first; if it fails (likely dyno asleep), retry with a much longer one
+    let lastErr = null;
+    for (const t of [10000, 60000]) {
+      try {
+        const resp = await _pushOnce(data, t);
+        if (resp && resp.ok) {
+          _serverAvailable = true;
+          if (syncDot) { syncDot.title = 'Synced ' + new Date().toLocaleTimeString(); syncDot.style.background = '#2d7a3a'; }
+          return;
+        }
+        lastErr = new Error('HTTP ' + (resp ? resp.status : '?'));
+      } catch (e) {
+        lastErr = e;
       }
-    } catch (e) {
-      console.log('Sync push failed (offline mode):', e.message);
-      const syncDot = document.getElementById('sync-status');
-      if (syncDot) { syncDot.title = 'Offline'; syncDot.style.background = '#c0392b'; }
     }
+    console.warn('Sync push failed:', lastErr && lastErr.message);
+    if (syncDot) { syncDot.title = 'Offline (push failed: ' + (lastErr && lastErr.message) + ')'; syncDot.style.background = '#c0392b'; }
   }, 2000);
 }
 
 // Pull data from server into localStorage on page load
 async function _syncFromServer() {
   if (!API_BASE) { _initialSyncDone = true; return; }
-  try {
-    const resp = await fetch(API_BASE + '/data', { signal: AbortSignal.timeout(5000) });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const data = await resp.json();
-    const keys = Object.keys(data);
-    if (keys.length > 0) {
-      keys.forEach(k => localStorage.setItem(k, data[k]));
-      console.log('Synced ' + keys.length + ' keys from server.');
+  const syncDot = document.getElementById('sync-status');
+  if (syncDot) { syncDot.title = 'Pulling from server...'; syncDot.style.background = '#e8a33a'; }
+  // First try a quick fetch (in case dyno is already warm); if it fails retry with the long
+  // timeout that lets Render's free tier finish waking up
+  let lastErr = null;
+  for (const t of [10000, 60000]) {
+    try {
+      const resp = await _fetchWithTimeout(API_BASE + '/data', {}, t);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      const keys = Object.keys(data);
+      if (keys.length > 0) {
+        keys.forEach(k => localStorage.setItem(k, data[k]));
+        console.log('Synced ' + keys.length + ' keys from server.');
+      }
+      _serverAvailable = true;
+      if (syncDot) { syncDot.title = 'Synced ' + new Date().toLocaleTimeString(); syncDot.style.background = '#2d7a3a'; }
+      _initialSyncDone = true;
+      return;
+    } catch (e) {
+      lastErr = e;
+      console.log('Server pull attempt failed (' + t + 'ms):', e.message);
     }
-    _serverAvailable = true;
-  } catch (e) {
-    console.log('Server unavailable, using local data:', e.message);
-    _serverAvailable = false;
   }
+  _serverAvailable = false;
+  if (syncDot) { syncDot.title = 'Offline (' + (lastErr && lastErr.message) + ') — click for help'; syncDot.style.background = '#c0392b'; }
   _initialSyncDone = true;
 }
 
@@ -1817,27 +1860,37 @@ function _serverSyncStatus(msg, isError) {
 }
 async function syncPushNow() {
   if (!API_BASE) { _serverSyncStatus('Server sync disabled (API_BASE is empty).', true); return; }
-  _serverSyncStatus('Pushing...');
-  try {
-    const data = _getAllCinemaData();
-    const resp = await fetch(API_BASE + '/data', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const result = await resp.json();
-    _serverSyncStatus('Pushed ' + result.keys + ' keys at ' + new Date().toLocaleTimeString());
-  } catch(e) {
-    _serverSyncStatus('Push failed: ' + e.message, true);
+  _serverSyncStatus('Pushing (server may take ~30-60s to wake up if idle)...');
+  const data = _getAllCinemaData();
+  let lastErr = null;
+  for (const t of [10000, 60000]) {
+    try {
+      const resp = await _fetchWithTimeout(API_BASE + '/data', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }, t);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const result = await resp.json();
+      _serverSyncStatus('Pushed ' + result.keys + ' keys at ' + new Date().toLocaleTimeString());
+      return;
+    } catch (e) { lastErr = e; }
   }
+  _serverSyncStatus('Push failed: ' + (lastErr && lastErr.message), true);
 }
 async function syncPullNow() {
   if (!API_BASE) { _serverSyncStatus('Server sync disabled (API_BASE is empty).', true); return; }
-  _serverSyncStatus('Pulling...');
+  _serverSyncStatus('Pulling (server may take ~30-60s to wake up if idle)...');
+  let resp = null, lastErr = null;
+  for (const t of [10000, 60000]) {
+    try {
+      resp = await _fetchWithTimeout(API_BASE + '/data', {}, t);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      break;
+    } catch (e) { lastErr = e; resp = null; }
+  }
+  if (!resp) { _serverSyncStatus('Pull failed: ' + (lastErr && lastErr.message), true); return; }
   try {
-    const resp = await fetch(API_BASE + '/data');
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
     const keys = Object.keys(data);
     if (keys.length === 0) { _serverSyncStatus('Server has no data yet.'); return; }
