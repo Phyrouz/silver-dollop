@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v3.2</title>
+<title>Cinema Aggregator v3.5</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -762,7 +762,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v3.2</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v3.5</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -785,9 +785,10 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== FILTERS ===== -->
 <div class="filters">
-<input type="text" id="search" placeholder="Search title, director, genre..." autocomplete="off">
-<select id="venue-filter"><option value="">All Venues</option></select>
-<select id="genre-filter"><option value="">All Genres</option></select>  <select id="country-filter"><option value="">All Countries</option></select>
+  <input type="text" id="search" placeholder="Search title, director, genre..." autocomplete="off">
+  <select id="venue-filter"><option value="">All Venues</option></select>
+  <select id="genre-filter"><option value="">All Genres</option></select>
+  <select id="country-filter"><option value="">All Countries</option></select>
   <div class="score-slider">
     <label>Min Score: <span id="score-val">1</span></label>
     <input type="range" id="score-filter" min="1" max="10" value="1">
@@ -1002,6 +1003,26 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
       <div id="web-status" class="source-status"></div>
     </div>
 
+    <div class="source-section">
+      <h3>Upload Saved Cinema Page (HTML / MHTML)</h3>
+      <p>Save the cinema's listings page from your browser (<strong>File &rarr; Save As &rarr; Webpage, Single File</strong> for <code>.mhtml</code>, or <code>.html</code>) and upload it here. Showtimes are parsed and merged into existing films.</p>
+      <ul style="margin:0.3rem 0 0.6rem 1.2rem;padding:0;font-size:0.85rem;color:var(--muted);">
+        <li><strong>Prince Charles Cinema</strong> &mdash; save <code>princecharlescinema.com/whats-on/</code></li>
+        <li><strong>The Garden Cinema</strong> &mdash; save <code>thegardencinema.co.uk/whats-on/</code> (the "By Date" view works best)</li>
+      </ul>
+      <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
+        <label style="font-size:0.85rem;font-weight:600;">Cinema:</label>
+        <select id="paste-venue" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:0.45rem;border-radius:6px;font-size:0.85rem;font-family:'Inter',sans-serif;">
+          <option value="auto">Auto-detect</option>
+          <option value="Prince Charles Cinema">Prince Charles Cinema</option>
+          <option value="The Garden Cinema">The Garden Cinema</option>
+        </select>
+      </div>
+      <label class="source-btn source-btn-primary" for="cinema-html-upload">Upload Page File</label>
+      <input type="file" id="cinema-html-upload" class="source-file-input" accept=".html,.htm,.mhtml,.mht">
+      <div id="cinema-html-status" class="source-status"></div>
+    </div>
+
     <h2 style="margin-top:2rem;">Taste Profiles</h2>
 
     <!-- Profile selector -->
@@ -1204,6 +1225,34 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
       <ul>
         <li>Restored default cinema schedule with 10 movies (La Notte, A Touch of Sin, Pickpocket, In The Mood For Love, etc.)</li>
         <li>Schedule auto-seeds on first visit if empty</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v3.5 &mdash; 4 June 2026</h3>
+      <ul>
+        <li>New in Add Sources: <strong>Upload Saved Cinema Page (HTML / MHTML)</strong> &mdash; save the Prince Charles Cinema or Garden Cinema listings page from your browser and upload it. The parser extracts each film's title, director, year, country, runtime and all dated showtimes (with 35mm/4K/70mm format for PCC) and merges them into your movie list</li>
+        <li>MHTML "single file" saves are decoded automatically (quoted-printable); cinema is auto-detected from the page, or pick it manually</li>
+        <li>Showtimes for films already in the list are merged in (no duplicates) rather than skipped</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v3.4 &mdash; 4 June 2026</h3>
+      <ul>
+        <li>Fixed: Month and Week calendar views now show films whose showtimes have no specific time (e.g. "Various") &mdash; previously these were silently dropped, so a film visible in Grid view was missing from the calendar. They now appear as an untimed chip</li>
+        <li>Within each calendar day, timed showings are listed first (earliest to latest) with untimed "Various" entries last</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v3.3 &mdash; 21 May 2026</h3>
+      <ul>
+        <li>Past showtimes are now hidden from movie cards: the date chips shown on each card filter to today-or-later, sorted soonest first, so you no longer see "Sun 5 Apr" listed for a screening today is 21 May</li>
+        <li>"Next Showing" sort now uses the next FUTURE showtime, not the earliest in the list &mdash; films whose only listed dates are in the past sort to the bottom (or are hidden entirely)</li>
+        <li>Films whose every showtime is in the past are hidden from All Movies (was: kept visible for 30 days post-date as a grace window, which ended up showing dead screenings)</li>
+        <li>Cards with showtimes but no future ones show a "All showtimes passed &mdash; check cinema" link instead of past chips</li>
+        <li>Search input has <code>autocomplete="off"</code> so the browser doesn't pre-fill with previously typed values (e.g. an email)</li>
       </ul>
     </div>
 
@@ -8205,11 +8254,19 @@ const MOTD_POOL = [
 })();
 
 // --- Enrich ---
+// next_date = the earliest FUTURE showtime (today or later). If every showtime
+// has passed, fall back to the latest past date so the film still has a value
+// to sort on, but sorting/filtering treats past dates as "expired".
 MOVIES.forEach(m => {
   m.next_date = '';
   if (m.showtimes && m.showtimes.length) {
+    const todayStr = new Date().toISOString().slice(0,10);
     const dates = m.showtimes.map(s => s.date).filter(Boolean).sort();
-    m.next_date = dates[0] || '';
+    const future = dates.filter(d => d >= todayStr);
+    m.next_date = future[0] || dates[dates.length - 1] || '';
+    m.has_future = future.length > 0;
+  } else {
+    m.has_future = false;
   }
 });
 
@@ -8265,9 +8322,11 @@ function _renderGridCalendar(movies, container, titleEl) {
     if (!m.showtimes) return;
     m.showtimes.forEach(st => {
       if (!st.date) return;
-      if (st.time === 'Various' || !st.time) return; // skip unspecified times
+      // Keep showtimes with no specific time (e.g. "Various"): render them as an
+      // untimed chip so the calendar matches the grid instead of silently hiding films.
+      const hasTime = st.time && st.time !== 'Various';
       events.push({
-        date: st.date, time: st.time, title: m.title,
+        date: st.date, time: hasTime ? st.time : '', title: m.title,
         year: m.year, director: m.director, venue: m.venue || '',
         format: st.format, booked: false,
         schedIdx: null, source: 'movies', past: st.date < todayStr,
@@ -8295,6 +8354,8 @@ function _renderGridMonthView(container, titleEl, events) {
 
   const byDate = {};
   events.forEach(e => { (byDate[e.date] = byDate[e.date] || []).push(e); });
+  // Timed showings first (ascending), untimed ("Various") chips last within each day.
+  Object.values(byDate).forEach(arr => arr.sort((a,b) => (a.time?0:1) - (b.time?0:1) || (a.time||'').localeCompare(b.time||'')));
 
   let html = `<div class="cal-header-row" style="grid-template-columns:repeat(7,1fr)">`;
   CAL_DAYS.forEach(d => { html += `<div class="cal-header-cell">${d}</div>`; });
@@ -8376,6 +8437,8 @@ function _renderGridWeekView(container, titleEl, events) {
 
   const byDate = {};
   events.forEach(e => { (byDate[e.date] = byDate[e.date] || []).push(e); });
+  // Timed showings first (ascending), untimed ("Various") chips last within each day.
+  Object.values(byDate).forEach(arr => arr.sort((a,b) => (a.time?0:1) - (b.time?0:1) || (a.time||'').localeCompare(b.time||'')));
 
   let html = `<div class="cal-header-row" style="grid-template-columns:50px repeat(7,1fr)">`;
   html += '<div class="cal-header-cell"></div>';
@@ -8566,11 +8629,21 @@ function fmtST(st, venue, movie) {
     const url = movie ? movieUrl(movie) : (VENUE_URLS[venue] || '#');
     return '<a href="'+url+'" target="_blank" style="font-size:.75rem;color:var(--accent);text-decoration:none;font-weight:500;">Check showtimes &rarr;</a>';
   }
-  return st.slice(0,5).map(s => {
+  // Show only FUTURE showtimes on the card. If every showtime has passed,
+  // fall back to a "Check cinema website" link so we never display dead dates.
+  const todayStr = new Date().toISOString().slice(0,10);
+  const future = st.filter(s => !s.date || s.date >= todayStr);
+  if (!future.length) {
+    const url = movie ? movieUrl(movie) : (VENUE_URLS[venue] || '#');
+    return '<a href="'+url+'" target="_blank" style="font-size:.75rem;color:var(--muted);text-decoration:none;font-style:italic;">All showtimes passed &mdash; check cinema &rarr;</a>';
+  }
+  // Sort future dates ascending so the soonest is first.
+  future.sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.time || '').localeCompare(b.time || ''));
+  return future.slice(0,5).map(s => {
     let d = s.date || '';
     if (d) try { d = new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); } catch(e){}
     return '<span class="st-item">' + d + ' ' + s.time + (s.format && s.format !== 'Digital' ? ' ' + s.format : '') + '</span>';
-  }).join('') + (st.length > 5 ? '<span class="st-item">+' + (st.length-5) + ' more</span>' : '');
+  }).join('') + (future.length > 5 ? '<span class="st-item">+' + (future.length-5) + ' more</span>' : '');
 }
 
 function movieId(m) { return btoa(encodeURIComponent(m.title + '|' + m.year)).replace(/=/g,''); }
@@ -8648,13 +8721,15 @@ function render() {
       });
       if (!hasMatch) return false;
     }
-    // Hide movies where ALL showtimes are more than 30 days in the past
-    // (keeps movies visible even if imported showtimes passed — cinemas often add new dates)
-    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30);
-    const cutoffStr = cutoff.toISOString().slice(0,10);
+    // Hide movies whose every showtime is in the past. We used to allow a 30-day
+    // grace window (assumption: cinemas re-list films) but that ended up showing
+    // movies whose ONLY listed dates were already weeks gone — confusing.
+    // A film with showtimes that all happened in the past is hidden; a film with
+    // no showtimes at all (manual / imported without dates) stays visible.
     if (m.showtimes && m.showtimes.length > 0) {
-      const allOld = m.showtimes.every(s => s.date && s.date < cutoffStr);
-      if (allOld) return false;
+      const todayStr = new Date().toISOString().slice(0,10);
+      const anyFuture = m.showtimes.some(s => !s.date || s.date >= todayStr);
+      if (!anyFuture) return false;
     }
     return true;
   });
@@ -9717,6 +9792,301 @@ document.querySelectorAll('.tab').forEach(tab => {
     const url = document.getElementById('custom-url').value.trim();
     if (!url) { setStatus('web-status', 'Please enter a URL', 'error'); return; }
     fetchCinemaUrl(url, 'web-status', new URL(url).hostname);
+  });
+
+  // ============================================================
+  // Upload saved cinema page (HTML / MHTML) and parse listings
+  // ============================================================
+
+  const MONTH_NUM = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+
+  // Pick the most sensible year for a month with no year given. Listings are
+  // forward-looking: a month earlier than the current month rolls to next year.
+  function inferYear(monthNum, refDate) {
+    const ref = refDate || new Date();
+    let y = ref.getFullYear();
+    if (monthNum < (ref.getMonth() + 1) - 1) y += 1; // allow 1 month of slack for past dates
+    return y;
+  }
+  function isoDate(y, m, d) {
+    return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  }
+  // Parse "Thursday 4th June", "Thu 04 Jun", "4 June" -> {m,d}
+  function parseDayMonth(text) {
+    const mt = text.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,})/);
+    if (!mt) return null;
+    const d = parseInt(mt[1], 10);
+    const m = MONTH_NUM[mt[2].slice(0, 3).toLowerCase()];
+    if (!m || !d) return null;
+    return { m, d };
+  }
+  // Normalise "12:00 pm" / "9:30am" / "14:15" -> "HH:MM" (24h)
+  function normTime(text) {
+    const mt = text.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
+    if (!mt) return '';
+    let h = parseInt(mt[1], 10);
+    const min = mt[2];
+    const ap = (mt[3] || '').toLowerCase();
+    if (ap === 'pm' && h < 12) h += 12;
+    if (ap === 'am' && h === 12) h = 0;
+    return String(h).padStart(2, '0') + ':' + min;
+  }
+
+  // Decode an MHTML file into the main HTML document string.
+  function mhtmlToHtml(raw) {
+    // Find the multipart boundary
+    const bMatch = raw.match(/boundary="?([^"\r\n]+)"?/i);
+    if (!bMatch) return raw; // not multipart -> treat as plain HTML
+    const boundary = '--' + bMatch[1];
+    const parts = raw.split(boundary);
+    // Find the first text/html part (the main frame)
+    let htmlPart = null;
+    for (const p of parts) {
+      if (/Content-Type:\s*text\/html/i.test(p)) { htmlPart = p; break; }
+    }
+    if (!htmlPart) return raw;
+    // Split headers from body (first blank line)
+    const sep = htmlPart.search(/\r?\n\r?\n/);
+    let headers = htmlPart.slice(0, sep);
+    let body = htmlPart.slice(sep).replace(/^\r?\n\r?\n/, '');
+    if (/quoted-printable/i.test(headers)) body = decodeQuotedPrintable(body);
+    return body;
+  }
+  // Minimal quoted-printable decoder (handles soft line breaks + =XX hex).
+  function decodeQuotedPrintable(s) {
+    s = s.replace(/=\r?\n/g, ''); // soft line breaks
+    const bytes = [];
+    for (let i = 0; i < s.length; i++) {
+      if (s[i] === '=' && i + 2 < s.length && /[0-9A-Fa-f]{2}/.test(s.substr(i + 1, 2))) {
+        bytes.push(parseInt(s.substr(i + 1, 2), 16));
+        i += 2;
+      } else {
+        bytes.push(s.charCodeAt(i));
+      }
+    }
+    try {
+      return new TextDecoder('utf-8').decode(new Uint8Array(bytes));
+    } catch (e) {
+      return s;
+    }
+  }
+
+  // Merge parsed films (with showtimes) into MOVIES; merges showtimes for
+  // existing titles instead of skipping them. Returns {added, merged, screenings}.
+  function mergeCinemaFilms(films) {
+    let added = 0, merged = 0, screenings = 0;
+    const byKey = new Map();
+    MOVIES.forEach(m => byKey.set((m.title || '').toLowerCase().trim(), m));
+    films.forEach(f => {
+      if (!f.title) return;
+      const key = f.title.toLowerCase().trim();
+      let m = byKey.get(key);
+      if (!m) {
+        m = {
+          title: f.title, year: f.year || '', director: f.director || '',
+          genre: f.genre || 'Drama', summary: f.summary || '', venue: f.venue,
+          country: f.country || '', duration: f.duration || '', showtimes: [],
+          poster_url: f.poster_url || '', taste_score: 5, taste_pct: 5, next_date: ''
+        };
+        MOVIES.push(m);
+        byKey.set(key, m);
+        added++;
+      } else {
+        // Fill blanks on the existing record
+        if (!m.director && f.director) m.director = f.director;
+        if (!m.year && f.year) m.year = f.year;
+        if (!m.country && f.country) m.country = f.country;
+        if (!m.duration && f.duration) m.duration = f.duration;
+        if (!m.summary && f.summary) m.summary = f.summary;
+        if (!m.showtimes) m.showtimes = [];
+        merged++;
+      }
+      const existing = new Set(m.showtimes.map(s => s.date + '|' + s.time));
+      (f.showtimes || []).forEach(st => {
+        const sig = st.date + '|' + st.time;
+        if (!existing.has(sig)) { m.showtimes.push(st); existing.add(sig); screenings++; }
+      });
+    });
+    // Persist parsed films so they survive reload (same store as other added movies)
+    const saved = JSON.parse(localStorage.getItem('cinema_added_movies') || '[]');
+    films.forEach(f => {
+      if (!saved.some(s => (s.title || '').toLowerCase() === (f.title || '').toLowerCase())) {
+        const m = byKey.get(f.title.toLowerCase().trim());
+        if (m) saved.push(m);
+      }
+    });
+    localStorage.setItem('cinema_added_movies', JSON.stringify(saved));
+    rescoreAll();
+    document.getElementById('movie-count').textContent = MOVIES.length;
+    return { added, merged, screenings };
+  }
+
+  // --- Prince Charles Cinema HTML parser ---
+  function parsePCCDoc(doc, refDate) {
+    const venue = 'Prince Charles Cinema';
+    const films = [];
+    doc.querySelectorAll('.jacrofilm-list-content').forEach(block => {
+      const titleEl = block.querySelector('.liveeventtitle');
+      if (!titleEl) return;
+      const title = titleEl.textContent.trim();
+      if (!title) return;
+      const film = { title, venue, showtimes: [] };
+      const stats = block.querySelector('.running-time');
+      if (stats) {
+        stats.querySelectorAll('span').forEach(s => {
+          const t = s.textContent.trim();
+          if (/^\d{4}$/.test(t)) film.year = t;
+          else if (/min/i.test(t)) film.duration = t.replace(/\s+/g, '');
+          else if (/^\(.*\)$/.test(t)) {} // certificate — skip
+          else if (/^[A-Z][a-z]/.test(t) && t.length < 30 && !film.country && /USA|UK|France|Germany|Italy|Japan|Spain|Canada|Australia|Ireland|Korea|China|India|Mexico|Sweden|Denmark|Brazil|Russia|Iran/i.test(t)) film.country = t;
+          else if (/^[A-Z]/.test(t) && !film.genre && !/min|\d{4}/.test(t)) film.genre = t;
+        });
+      }
+      const info = block.querySelector('.film-info');
+      if (info) {
+        info.querySelectorAll('span').forEach(s => {
+          const t = s.textContent.trim();
+          const dm = t.match(/^Directed by\s+(.+)$/i);
+          if (dm) film.director = dm[1].trim();
+        });
+      }
+      const syn = block.querySelector('.jacro-formatted-text');
+      if (syn) film.summary = syn.textContent.trim().replace(/\s+/g, ' ').slice(0, 600);
+      // Showtimes: walk the performance list — headings set the current date,
+      // each <li> carries a time and a format class.
+      const perf = block.parentElement.querySelector('.performance-list-items') ||
+                   block.querySelector('.performance-list-items');
+      if (perf) {
+        let curDate = '';
+        perf.childNodes.forEach(node => {
+          if (node.nodeType !== 1) return;
+          if (node.classList && node.classList.contains('heading')) {
+            const dm = parseDayMonth(node.textContent.trim());
+            curDate = dm ? isoDate(inferYear(dm.m, refDate), dm.m, dm.d) : '';
+          } else if (node.tagName === 'LI' && curDate) {
+            const timeEl = node.querySelector('.time');
+            const time = timeEl ? normTime(timeEl.textContent) : '';
+            let format = 'Digital';
+            const tag = node.querySelector('.tag');
+            if (tag) format = tag.textContent.trim();
+            else if (node.className) {
+              const cl = node.className.toLowerCase();
+              if (cl.includes('70mm')) format = '70mm';
+              else if (cl.includes('35mm')) format = '35mm';
+              else if (cl.includes('4k')) format = '4K';
+            }
+            film.showtimes.push({ date: curDate, time: time || 'Various', format });
+          }
+        });
+      }
+      films.push(film);
+    });
+    return films;
+  }
+
+  // --- The Garden Cinema HTML parser ---
+  function parseGardenDoc(doc, refDate) {
+    const venue = 'The Garden Cinema';
+    const byTitle = new Map();
+    doc.querySelectorAll('.films-list__by-date__film').forEach(block => {
+      const titleEl = block.querySelector('.films-list__by-date__film__title');
+      if (!titleEl) return;
+      // Title without the rating span
+      const link = titleEl.querySelector('a');
+      let title = (link || titleEl).textContent;
+      const ratingSpan = titleEl.querySelector('.films-list__by-date__film__rating');
+      if (ratingSpan) title = title.replace(ratingSpan.textContent, '');
+      title = title.trim();
+      if (!title) return;
+      let film = byTitle.get(title.toLowerCase());
+      if (!film) {
+        film = { title, venue, showtimes: [] };
+        const syn = block.querySelector('.films-list__by-date__film__synopsis');
+        if (syn) film.summary = syn.textContent.trim().replace(/\s+/g, ' ').slice(0, 600);
+        const stats = block.querySelector('.films-list__by-date__film__stats');
+        if (stats) {
+          // "Lee Sang-il, Japan, 2025, 175m."
+          const parts = stats.textContent.replace(/\.\s*$/, '').split(',').map(s => s.trim()).filter(Boolean);
+          parts.forEach(p => {
+            if (/^\d{4}$/.test(p)) film.year = p;
+            else if (/^\d+\s*m(in)?$/i.test(p)) film.duration = p.replace(/\s+/g, '').replace(/m$/i, 'min');
+            else if (/USA|UK|France|Germany|Italy|Japan|Spain|Canada|Australia|Ireland|Korea|China|India|Mexico|Sweden|Denmark|Brazil|Russia|Iran|Netherlands|Belgium/i.test(p) && !film.country) film.country = p;
+            else if (!film.director && /[A-Za-z]/.test(p) && !/^\d/.test(p)) film.director = p;
+          });
+        }
+        const img = block.querySelector('img');
+        if (img && img.src) film.poster_url = img.src;
+        byTitle.set(title.toLowerCase(), film);
+      }
+      // Screenings for this film block
+      block.querySelectorAll('.screening-panel').forEach(panel => {
+        const dateTitle = panel.querySelector('.screening-panel__date-title');
+        const dm = dateTitle ? parseDayMonth(dateTitle.textContent.trim()) : null;
+        const date = dm ? isoDate(inferYear(dm.m, refDate), dm.m, dm.d) : '';
+        if (!date) return;
+        panel.querySelectorAll('.screening-time a, a.screening').forEach(a => {
+          const time = normTime(a.textContent);
+          film.showtimes.push({ date, time: time || 'Various', format: 'Digital' });
+        });
+      });
+    });
+    return [...byTitle.values()];
+  }
+
+  function detectVenue(doc, rawHtml) {
+    if (doc.querySelector('.jacrofilm-list-content') || /princecharlescinema/i.test(rawHtml)) return 'Prince Charles Cinema';
+    if (doc.querySelector('.films-list__by-date__film') || /thegardencinema/i.test(rawHtml)) return 'The Garden Cinema';
+    return '';
+  }
+
+  document.getElementById('cinema-html-upload').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const statusId = 'cinema-html-status';
+    setStatus(statusId, 'Reading ' + file.name + '...', 'loading');
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        let raw = ev.target.result;
+        const isMhtml = /\.mht(ml)?$/i.test(file.name) || /Content-Type:\s*multipart\/related/i.test(raw.slice(0, 2000));
+        const html = isMhtml ? mhtmlToHtml(raw) : raw;
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+
+        // Use the page's saved date (if MHTML) as the reference for inferring years.
+        let refDate = new Date();
+        const dm = raw.match(/^Date:\s*(.+)$/m);
+        if (dm) { const d = new Date(dm[1]); if (!isNaN(d)) refDate = d; }
+
+        let venue = document.getElementById('paste-venue').value;
+        if (venue === 'auto') venue = detectVenue(doc, html);
+        if (!venue) {
+          setStatus(statusId, 'Could not detect the cinema. Pick it manually from the dropdown and re-upload.', 'error');
+          return;
+        }
+
+        let films;
+        if (venue === 'Prince Charles Cinema') films = parsePCCDoc(doc, refDate);
+        else films = parseGardenDoc(doc, refDate);
+
+        films = films.filter(f => f.title && f.showtimes.length);
+        if (!films.length) {
+          setStatus(statusId, 'Parsed ' + venue + ' but found no films with showtimes. The page layout may have changed.', 'error');
+          return;
+        }
+        const r = mergeCinemaFilms(films);
+        const totalScreenings = films.reduce((n, f) => n + f.showtimes.length, 0);
+        setStatus(statusId,
+          venue + ': parsed ' + films.length + ' films (' + totalScreenings + ' screenings). ' +
+          r.added + ' new, ' + r.merged + ' updated, ' + r.screenings + ' showtimes added. Total films: ' + MOVIES.length,
+          'success');
+        localStorage.setItem('last_cinema_fetch', new Date().toISOString());
+        render();
+      } catch (err) {
+        setStatus(statusId, 'Parse failed: ' + err.message, 'error');
+      }
+    };
+    reader.onerror = function() { setStatus(statusId, 'Could not read the file.', 'error'); };
+    reader.readAsText(file);
   });
 
   // Upload CSV
