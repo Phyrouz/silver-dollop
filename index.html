@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v4.0</title>
+<title>Cinema Aggregator v4.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -762,7 +762,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.0</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.1</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1229,6 +1229,13 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <div class="help-section">
+      <h3>v4.1 &mdash; 4 June 2026</h3>
+      <ul>
+        <li>ROOT CAUSE of the email-in-search-box found and fixed: it was never browser autofill. The Portfolio tool's model-book keys (<code>mb_arc</code>/<code>mb_lib</code>, which hold a contact email + phone + measurements) were wrongly listed in this app's sync keys, so that contact email rode in through the shared server store and landed in the search box on every machine. Those keys are no longer synced or read by Cinema Aggregator, so the unrelated email can't appear here again. (Earlier autofill-guard code from v3.8&ndash;v4.0 was treating the wrong cause; this addresses the actual source.)</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
       <h3>v4.0 &mdash; 4 June 2026</h3>
       <ul>
         <li>Autofilled email defeated at the source: the search box's <code>value</code> setter is now intercepted, so the instant the browser tries to inject a contact-shaped value the assignment is rejected and blanked &mdash; before the field is ever painted. No reliance on timers or on the user-typed flag. Backed up by interaction-event and short-poll re-checks.</li>
@@ -1561,9 +1568,13 @@ const _origGetItem = localStorage.getItem.bind(localStorage);
 const _origSetItem = localStorage.setItem.bind(localStorage);
 const _origRemoveItem = localStorage.removeItem.bind(localStorage);
 
-// Keys that should be namespaced per user
+// Keys that should be namespaced per user.
+// NOTE: 'mb_lib'/'mb_arc' belong to the Portfolio tool (model-book data: contact email,
+// phone, measurements). They are NOT used by Cinema Aggregator and were leaking the
+// portfolio's contact email into the search box via the shared sync store. Removed so
+// the cinema app no longer syncs or reads that cross-tool data.
 const USER_KEYS = ['cinema_viewed','cinema_schedule','cinema_profiles','cinema_active_profile',
-  'cinema_netflix_titles','cinema_fav_films','cinema_added_movies','mb_lib','mb_arc'];
+  'cinema_netflix_titles','cinema_fav_films','cinema_added_movies'];
 
 // Override localStorage for user-scoped keys
 const origLS = {
@@ -9030,57 +9041,7 @@ function addToCalendar(movieIdx, showIdx) {
   }
 }
 
-// Mark when the user actually types, so render() knows a value in the search box is
-// real (and not a browser-autofilled email). The clearing itself happens at the read
-// site inside render(), so an injected email never reaches the filter — no flash, no timers.
 window._searchUserTyped = false;
-(function guardSearchAutofill() {
-  const s = document.getElementById('search');
-  const looksLikeContact = v => /\S+@\S+|\.(com|fr|co\.uk|net|org|it)\b/i.test(v);
-  // A real keystroke is the ONLY thing that marks the value as user-typed. Browser
-  // autofill also fires an `input` event, so we cannot trust `input` to tell a human
-  // keystroke from an injected email — that was the bug. `keydown.isTrusted` is real.
-  s.addEventListener('keydown', e => { if (e.isTrusted) window._searchUserTyped = true; });
-  // If the field is empty again, reset the flag so a later autofill can be cleared.
-  s.addEventListener('input', () => { if (s.value.trim() === '') window._searchUserTyped = false; });
-  // Belt-and-braces: clear an autofilled value as soon as the browser injects it.
-  s.addEventListener('change', () => {
-    if (!window._searchUserTyped && looksLikeContact(s.value)) { s.value = ''; render(); }
-  });
-  // Wipe any browser-injected email from the visible box. No timers (we can't reliably
-  // out-race autofill). Instead we watch the element's `value` directly: the instant the
-  // browser sets it to something contact-shaped that the user didn't type, we blank it.
-  const wipeIfAutofilled = () => {
-    if (!window._searchUserTyped && looksLikeContact(s.value)) {
-      s.value = '';
-      if (typeof render === 'function') render();
-      return true;
-    }
-    return false;
-  };
-  // 1) Intercept programmatic value sets (what autofill ultimately does) at the property
-  //    level, so an injected email is rejected the moment it is assigned — before paint.
-  const proto = Object.getPrototypeOf(s);
-  const desc = Object.getOwnPropertyDescriptor(proto, 'value') ||
-               Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-  if (desc && desc.set) {
-    Object.defineProperty(s, 'value', {
-      configurable: true,
-      get() { return desc.get.call(this); },
-      set(v) {
-        if (!window._searchUserTyped && looksLikeContact(String(v || ''))) v = '';
-        desc.set.call(this, v);
-      }
-    });
-  }
-  // 2) Belt-and-braces: poll briefly AND on every interaction event autofill can ride in on.
-  wipeIfAutofilled();
-  ['focus','blur','change','input','animationstart'].forEach(ev => s.addEventListener(ev, wipeIfAutofilled));
-  window.addEventListener('pageshow', wipeIfAutofilled);
-  // Short, finite poll to catch async autofill regardless of when Chrome lands it.
-  let n = 0;
-  const iv = setInterval(() => { wipeIfAutofilled(); if (++n > 20) clearInterval(iv); }, 200);
-})();
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('venue-filter').addEventListener('change', render);
 document.getElementById('genre-filter').addEventListener('change', render);
