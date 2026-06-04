@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v3.5</title>
+<title>Cinema Aggregator v3.7</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -762,7 +762,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v3.5</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v3.7</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -785,7 +785,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== FILTERS ===== -->
 <div class="filters">
-  <input type="text" id="search" placeholder="Search title, director, genre..." autocomplete="off">
+  <input type="search" id="search" name="cinema-filter-q" placeholder="Search title, director, genre..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-autocomplete="none" data-form-type="other" data-lpignore="true" data-1p-ignore>
   <select id="venue-filter"><option value="">All Venues</option></select>
   <select id="genre-filter"><option value="">All Genres</option></select>
   <select id="country-filter"><option value="">All Countries</option></select>
@@ -1225,6 +1225,20 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
       <ul>
         <li>Restored default cinema schedule with 10 movies (La Notte, A Touch of Sin, Pickpocket, In The Mood For Love, etc.)</li>
         <li>Schedule auto-seeds on first visit if empty</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v3.7 &mdash; 4 June 2026</h3>
+      <ul>
+        <li>Autofilled-email search bug fixed for good: the email is now neutralised at the point the filter reads the search box, so a browser-injected address never filters out your films &mdash; no flash, no timing guesswork. (Earlier attempts relied on <code>autocomplete</code> attributes, which Chrome/Safari ignore.)</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v3.6 &mdash; 4 June 2026</h3>
+      <ul>
+        <li>Fixed: the browser was autofilling a saved email address into the search box, which filtered out every film ("No movies match your filters"). The search field now strongly opts out of autofill, and any autofilled email is cleared automatically on load if you didn't type it</li>
       </ul>
     </div>
 
@@ -8695,7 +8709,14 @@ function render() {
     if (gridViewToggle) gridViewToggle.style.display = ['planner','sources','help','schedule','admin','viewed'].includes(currentTab) ? 'none' : '';
   }
 
-  const search = document.getElementById('search').value.toLowerCase();
+  // Browsers (Chrome/Safari/password managers) ignore autocomplete="off" and inject a
+  // saved email into the search box, which then filters out every film. Neutralise it at
+  // the source: if the user hasn't typed and the value looks like an email/contact, drop it.
+  const searchEl = document.getElementById('search');
+  if (!window._searchUserTyped && /\S+@\S+|\.(com|fr|co\.uk|net|org|it)\b/i.test(searchEl.value)) {
+    searchEl.value = '';
+  }
+  const search = searchEl.value.toLowerCase();
   const vF = document.getElementById('venue-filter').value;
   const gF = document.getElementById('genre-filter').value;
   const cF = document.getElementById('country-filter').value;
@@ -8988,6 +9009,20 @@ function addToCalendar(movieIdx, showIdx) {
   }
 }
 
+// Mark when the user actually types, so render() knows a value in the search box is
+// real (and not a browser-autofilled email). The clearing itself happens at the read
+// site inside render(), so an injected email never reaches the filter — no flash, no timers.
+window._searchUserTyped = false;
+(function guardSearchAutofill() {
+  const s = document.getElementById('search');
+  s.addEventListener('input', () => { window._searchUserTyped = (s.value.trim() !== ''); });
+  // Belt-and-braces: clear an autofilled value as soon as the browser injects it.
+  s.addEventListener('change', () => {
+    if (!window._searchUserTyped && /\S+@\S+|\.(com|fr|co\.uk|net|org|it)\b/i.test(s.value)) {
+      s.value = ''; render();
+    }
+  });
+})();
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('venue-filter').addEventListener('change', render);
 document.getElementById('genre-filter').addEventListener('change', render);
