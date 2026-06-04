@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v3.7</title>
+<title>Cinema Aggregator v3.9</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -762,7 +762,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v3.7</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v3.9</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1225,6 +1225,20 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
       <ul>
         <li>Restored default cinema schedule with 10 movies (La Notte, A Touch of Sin, Pickpocket, In The Mood For Love, etc.)</li>
         <li>Schedule auto-seeds on first visit if empty</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v3.9 &mdash; 4 June 2026</h3>
+      <ul>
+        <li>The autofilled email is now actively wiped out of the search box itself, not just ignored by the filter. Because browser autofill can land up to ~1.5s after the page loads, the box is re-cleared a few times on load (and on focus / back-button restore) until the browser stops re-injecting &mdash; so you never see <code>divingangbo@yahoo.fr</code> sitting there again.</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v3.8 &mdash; 4 June 2026</h3>
+      <ul>
+        <li>Autofilled-email bug fixed at the actual root cause: browser autofill fires an <code>input</code> event, which the previous guard mistook for real typing &mdash; so it flagged the injected email as "user-typed" and refused to clear it. The typed-flag is now set only by a trusted <code>keydown</code>, so a browser-injected address can never masquerade as your own search text.</li>
       </ul>
     </div>
 
@@ -9015,13 +9029,31 @@ function addToCalendar(movieIdx, showIdx) {
 window._searchUserTyped = false;
 (function guardSearchAutofill() {
   const s = document.getElementById('search');
-  s.addEventListener('input', () => { window._searchUserTyped = (s.value.trim() !== ''); });
+  const looksLikeContact = v => /\S+@\S+|\.(com|fr|co\.uk|net|org|it)\b/i.test(v);
+  // A real keystroke is the ONLY thing that marks the value as user-typed. Browser
+  // autofill also fires an `input` event, so we cannot trust `input` to tell a human
+  // keystroke from an injected email — that was the bug. `keydown.isTrusted` is real.
+  s.addEventListener('keydown', e => { if (e.isTrusted) window._searchUserTyped = true; });
+  // If the field is empty again, reset the flag so a later autofill can be cleared.
+  s.addEventListener('input', () => { if (s.value.trim() === '') window._searchUserTyped = false; });
   // Belt-and-braces: clear an autofilled value as soon as the browser injects it.
   s.addEventListener('change', () => {
-    if (!window._searchUserTyped && /\S+@\S+|\.(com|fr|co\.uk|net|org|it)\b/i.test(s.value)) {
-      s.value = ''; render();
-    }
+    if (!window._searchUserTyped && looksLikeContact(s.value)) { s.value = ''; render(); }
   });
+  // Actively WIPE any browser-injected email from the visible box. Autofill can land
+  // late (0–1.5s after load), so clear now and re-check a few times until it gives up.
+  // This wipes the field itself, not just the filter read — so you never see the email.
+  const wipeIfAutofilled = () => {
+    if (!window._searchUserTyped && looksLikeContact(s.value)) {
+      s.value = '';
+      if (typeof render === 'function') render();
+    }
+  };
+  wipeIfAutofilled();
+  [50, 150, 400, 800, 1500].forEach(t => setTimeout(wipeIfAutofilled, t));
+  // Catch autofill that fires on focus/blur or browser restore, too.
+  s.addEventListener('focus', wipeIfAutofilled);
+  window.addEventListener('pageshow', wipeIfAutofilled);
 })();
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('venue-filter').addEventListener('change', render);
