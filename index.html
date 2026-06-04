@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v3.9</title>
+<title>Cinema Aggregator v4.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -762,7 +762,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v3.9</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.0</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1225,6 +1225,13 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
       <ul>
         <li>Restored default cinema schedule with 10 movies (La Notte, A Touch of Sin, Pickpocket, In The Mood For Love, etc.)</li>
         <li>Schedule auto-seeds on first visit if empty</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v4.0 &mdash; 4 June 2026</h3>
+      <ul>
+        <li>Autofilled email defeated at the source: the search box's <code>value</code> setter is now intercepted, so the instant the browser tries to inject a contact-shaped value the assignment is rejected and blanked &mdash; before the field is ever painted. No reliance on timers or on the user-typed flag. Backed up by interaction-event and short-poll re-checks.</li>
       </ul>
     </div>
 
@@ -9040,20 +9047,39 @@ window._searchUserTyped = false;
   s.addEventListener('change', () => {
     if (!window._searchUserTyped && looksLikeContact(s.value)) { s.value = ''; render(); }
   });
-  // Actively WIPE any browser-injected email from the visible box. Autofill can land
-  // late (0–1.5s after load), so clear now and re-check a few times until it gives up.
-  // This wipes the field itself, not just the filter read — so you never see the email.
+  // Wipe any browser-injected email from the visible box. No timers (we can't reliably
+  // out-race autofill). Instead we watch the element's `value` directly: the instant the
+  // browser sets it to something contact-shaped that the user didn't type, we blank it.
   const wipeIfAutofilled = () => {
     if (!window._searchUserTyped && looksLikeContact(s.value)) {
       s.value = '';
       if (typeof render === 'function') render();
+      return true;
     }
+    return false;
   };
+  // 1) Intercept programmatic value sets (what autofill ultimately does) at the property
+  //    level, so an injected email is rejected the moment it is assigned — before paint.
+  const proto = Object.getPrototypeOf(s);
+  const desc = Object.getOwnPropertyDescriptor(proto, 'value') ||
+               Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  if (desc && desc.set) {
+    Object.defineProperty(s, 'value', {
+      configurable: true,
+      get() { return desc.get.call(this); },
+      set(v) {
+        if (!window._searchUserTyped && looksLikeContact(String(v || ''))) v = '';
+        desc.set.call(this, v);
+      }
+    });
+  }
+  // 2) Belt-and-braces: poll briefly AND on every interaction event autofill can ride in on.
   wipeIfAutofilled();
-  [50, 150, 400, 800, 1500].forEach(t => setTimeout(wipeIfAutofilled, t));
-  // Catch autofill that fires on focus/blur or browser restore, too.
-  s.addEventListener('focus', wipeIfAutofilled);
+  ['focus','blur','change','input','animationstart'].forEach(ev => s.addEventListener(ev, wipeIfAutofilled));
   window.addEventListener('pageshow', wipeIfAutofilled);
+  // Short, finite poll to catch async autofill regardless of when Chrome lands it.
+  let n = 0;
+  const iv = setInterval(() => { wipeIfAutofilled(); if (++n > 20) clearInterval(iv); }, 200);
 })();
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('venue-filter').addEventListener('change', render);
