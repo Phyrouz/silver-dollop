@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v4.1</title>
+<title>Cinema Aggregator v4.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -762,7 +762,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.1</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.2</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -970,7 +970,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
     <div class="source-section">
       <h3>Upload BFI Programme (PDF)</h3>
-      <p>Upload a BFI Southbank programme guide PDF. Movies will be extracted automatically.</p>
+      <p>Upload a BFI Southbank programme guide PDF (any month). Films <strong>and their screening dates, times and screens (NFT1/2/3)</strong> are extracted automatically and merged into your movie list &mdash; existing films get their new showtimes backfilled.</p>
       <div id="bfi-reminder" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:0.6rem 0.9rem;margin-bottom:0.75rem;font-size:0.85rem;color:#7a5800;">
         &#128197; <strong>Monthly reminder:</strong> A new BFI programme is usually out at the start of the month. Time to upload the latest PDF!
         <button onclick="document.getElementById('bfi-reminder').style.display='none';localStorage.setItem('bfi_reminder_dismissed',new Date().toISOString());" style="margin-left:0.75rem;background:none;border:none;cursor:pointer;font-size:1rem;line-height:1;">&#10005;</button>
@@ -1165,6 +1165,16 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <h2 style="margin-top:2rem;">Version History</h2>
+
+    <div class="help-section">
+      <h3>v4.2 &mdash; 21 July 2026</h3>
+      <ul>
+        <li><strong>BFI programme PDF now captures screening dates &amp; times.</strong> Previously the BFI PDF upload extracted only film titles/directors, so every BFI card showed a bare "Check showtimes &rarr;" link with no dates &mdash; even though the guide clearly lists them (e.g. <em>All About Eve</em> &mdash; SUN 5 JUL 18:00 NFT1). The parser now reads each film's <code>DAY DD MON</code> + <code>HH:MM NFT1/2/3</code> blocks and attaches real showtimes.</li>
+        <li>Works for <strong>any month, indefinitely</strong>: the guide's month/year is inferred from the filename (e.g. <code>...july-2026...</code>), falling back to the most common month token in the PDF. Carryover dates (a July guide listing a late-June screening) and year rollover (a December guide listing January dates) resolve to the correct year.</li>
+        <li>Uploaded showtimes <strong>merge into existing films</strong> (dedup by date+time) rather than creating duplicates; brand-new films are added. Backfilled dates on the built-in film list persist across reloads and sync across devices via the new <code>cinema_bfi_showtimes</code> store.</li>
+        <li>Upload status now reports films found, total showtimes extracted, films added and films updated.</li>
+      </ul>
+    </div>
 
     <div class="help-section">
       <h3>v2.8 &mdash; 17 April 2026</h3>
@@ -1574,7 +1584,7 @@ const _origRemoveItem = localStorage.removeItem.bind(localStorage);
 // portfolio's contact email into the search box via the shared sync store. Removed so
 // the cinema app no longer syncs or reads that cross-tool data.
 const USER_KEYS = ['cinema_viewed','cinema_schedule','cinema_profiles','cinema_active_profile',
-  'cinema_netflix_titles','cinema_fav_films','cinema_added_movies'];
+  'cinema_netflix_titles','cinema_fav_films','cinema_added_movies','cinema_bfi_showtimes'];
 
 // Override localStorage for user-scoped keys
 const origLS = {
@@ -9311,6 +9321,63 @@ document.querySelectorAll('.tab').forEach(tab => {
         allLines.push(...lines, '---PAGEBREAK---');
       }
 
+      // --- Programme month/year: infer the guide's month so listed dates get a full ISO date.
+      // Works for any month "from now to infinite": prefer the filename ("...july-2026..."),
+      // then fall back to the most common month token in the PDF, then today.
+      const MONTHS_NUM = { JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12 };
+      const MONTH_NAMES = { january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12 };
+      let progYear = 0, progMonth = 0;
+      const fnameLc = file.name.toLowerCase();
+      const fnMonth = Object.keys(MONTH_NAMES).find(mn => fnameLc.includes(mn));
+      const fnYear = (fnameLc.match(/20\d{2}/) || [])[0];
+      if (fnMonth) progMonth = MONTH_NAMES[fnMonth];
+      if (fnYear) progYear = parseInt(fnYear, 10);
+      if (!progMonth || !progYear) {
+        // Fall back to the most frequent DAY DD MON token in the document
+        const monCount = {};
+        const scan = allLines.join('\n');
+        let mm; const monRe = /\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\s+\d{1,2}\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/g;
+        while ((mm = monRe.exec(scan))) monCount[mm[1]] = (monCount[mm[1]] || 0) + 1;
+        const topMon = Object.keys(monCount).sort((a, b) => monCount[b] - monCount[a])[0];
+        if (!progMonth && topMon) progMonth = MONTHS_NUM[topMon];
+        if (!progYear) progYear = new Date().getFullYear();
+      }
+      if (!progMonth) progMonth = new Date().getMonth() + 1;
+
+      // Given a month token from a date line, resolve the correct year. A guide can list
+      // dates from the previous month (carryover) or roll into next year (a Dec guide showing Jan).
+      function resolveYear(monthNum) {
+        if (monthNum === progMonth) return progYear;
+        // Guide near year-end listing early-year dates -> next year
+        if (progMonth >= 11 && monthNum <= 2) return progYear + 1;
+        // Guide early in year listing late-year carryover dates -> previous year
+        if (progMonth <= 2 && monthNum >= 11) return progYear - 1;
+        return progYear;
+      }
+
+      // Extract every (date, time, screen) showtime from a film's block of lines.
+      // Dates appear as "SAT 11 JUL"; times as "14:10 NFT1". They may be interleaved with
+      // labels (INTRO, Q&A, TALK, JOINT TICKET). We collect dates and times in reading order
+      // and pair them sequentially — the order they appear in the PDF matches screening order.
+      const DATE_RE = /\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\s+(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/g;
+      const TIME_RE = /\b(\d{1,2}:\d{2})\s+(NFT[123]|STUDIO|IMAX|BLUE ROOM)\b/g;
+      function extractShowtimes(blockText) {
+        const dates = [], times = [];
+        let d; DATE_RE.lastIndex = 0;
+        while ((d = DATE_RE.exec(blockText))) dates.push({ day: parseInt(d[1], 10), mon: MONTHS_NUM[d[2]] });
+        let t; TIME_RE.lastIndex = 0;
+        while ((t = TIME_RE.exec(blockText))) times.push({ time: t[1], screen: t[2] });
+        const out = [];
+        const n = Math.min(dates.length, times.length);
+        for (let i = 0; i < n; i++) {
+          const y = resolveYear(dates[i].mon);
+          const iso = y + '-' + String(dates[i].mon).padStart(2, '0') + '-' + String(dates[i].day).padStart(2, '0');
+          if (!out.some(s => s.date === iso && s.time === times[i].time))
+            out.push({ date: iso, time: times[i].time, format: times[i].screen });
+        }
+        return out;
+      }
+
       // Country token (single or hyphenated co-productions like UK-France-Canada)
       const COUNTRY_TOKEN = '(?:USA|UK|France|Germany|Italy|Japan|Australia|Ireland|Canada|Spain|Brazil|Finland|Sweden|Denmark|Norway|Hungary|Greece|India|China|Hong Kong|South Korea|Mexico|Argentina|Poland|Russia|Iran|Belgium|Netherlands|Switzerland|Austria|Cuba|Bangladesh|Czech|Portugal|Romania|Turkey|Morocco|Algeria|Senegal|Colombia|Chile|Ukraine|Georgia|New Zealand|USSR|Saudi Arabia|United Arab Emirates|Qatar|Sudan|Syria|Singapore|BBC|Channel 4)';
       // Credit line: "Country [Year]. Director Name." — duration is OPTIONAL because in the
@@ -9347,7 +9414,14 @@ document.querySelectorAll('.tab').forEach(tab => {
       const movies = [];
       const seen = new Set();
 
+      // Index of every credit line, so a film's showtime block can run up to the next film.
+      const creditIdx = [];
       for (let j = 0; j < allLines.length; j++) {
+        if (CREDIT_RE.test(allLines[j].trim())) creditIdx.push(j);
+      }
+
+      for (let ci = 0; ci < creditIdx.length; ci++) {
+        const j = creditIdx[ci];
         const line = allLines[j].trim();
         const cm = CREDIT_RE.exec(line);
         if (!cm) continue;
@@ -9383,11 +9457,55 @@ document.querySelectorAll('.tab').forEach(tab => {
         if (seen.has(key)) continue;
         seen.add(key);
 
+        // Showtimes live in the block from this credit line up to the next film's credit line
+        // (bounded so a film with no dates doesn't absorb a distant later film's dates).
+        const blockEnd = ci + 1 < creditIdx.length ? creditIdx[ci + 1] : allLines.length;
+        const blockText = allLines.slice(j, blockEnd).join('\n');
+        const showtimes = extractShowtimes(blockText);
+
         const venue = file.name.toLowerCase().includes('bfi') ? 'BFI Southbank' : 'Uploaded';
-        movies.push(parseMovieLine(title + ', ' + year + ', ' + director + ', , ' + venue));
+        const mv = parseMovieLine(title + ', ' + year + ', ' + director + ', , ' + venue);
+        if (mv) { mv.showtimes = showtimes; movies.push(mv); }
       }
-      const added = addMoviesToList(movies.filter(Boolean));
-      setStatus('pdf-status', 'Extracted ' + movies.length + ' movies, added ' + added + ' new. Total: ' + MOVIES.length, 'success');
+
+      // Merge: backfill showtimes into existing films (dedup by date+time); add genuinely new ones.
+      let added = 0, updated = 0, stTotal = 0;
+      movies.forEach(m => {
+        stTotal += m.showtimes.length;
+        const existing = MOVIES.find(em => em.title.toLowerCase() === m.title.toLowerCase());
+        if (existing) {
+          if (!existing.showtimes) existing.showtimes = [];
+          let merged = 0;
+          m.showtimes.forEach(st => {
+            if (st.date && !existing.showtimes.some(es => es.date === st.date && es.time === st.time)) {
+              existing.showtimes.push(st); merged++;
+            }
+          });
+          if (!existing.director && m.director) existing.director = m.director;
+          if (merged) updated++;
+        } else {
+          MOVIES.push(m);
+          added++;
+        }
+      });
+      // Persist newly added films so they survive reload (mirrors addMoviesToList)
+      if (added) {
+        const savedAdded = JSON.parse(localStorage.getItem('cinema_added_movies') || '[]');
+        movies.forEach(m => {
+          if (!savedAdded.some(s => s.title.toLowerCase() === m.title.toLowerCase()))
+            savedAdded.push(m);
+        });
+        localStorage.setItem('cinema_added_movies', JSON.stringify(savedAdded));
+      }
+      // Persist showtimes merged into pre-existing films, so backfills also survive reload
+      localStorage.setItem('cinema_bfi_showtimes', JSON.stringify(
+        MOVIES.filter(m => m.venue === 'BFI Southbank' && m.showtimes && m.showtimes.length)
+              .map(m => ({ title: m.title, showtimes: m.showtimes }))
+      ));
+      rescoreAll();
+      render();
+      document.getElementById('movie-count').textContent = MOVIES.length;
+      setStatus('pdf-status', 'Extracted ' + movies.length + ' films (' + stTotal + ' showtimes). Added ' + added + ' new, updated ' + updated + '. Total: ' + MOVIES.length, 'success');
     } catch(err) {
       setStatus('pdf-status', 'Error parsing PDF: ' + err.message, 'error');
     }
@@ -10292,6 +10410,20 @@ document.querySelectorAll('.tab').forEach(tab => {
       }
     });
     document.getElementById('movie-count').textContent = MOVIES.length;
+  }
+  // Re-apply showtimes parsed from an uploaded BFI programme onto the built-in films,
+  // so dates backfilled into pre-existing entries survive a page reload.
+  const bfiShow = JSON.parse(localStorage.getItem('cinema_bfi_showtimes') || '[]');
+  if (bfiShow.length) {
+    bfiShow.forEach(rec => {
+      const m = MOVIES.find(x => x.title.toLowerCase() === rec.title.toLowerCase());
+      if (!m) return;
+      if (!m.showtimes) m.showtimes = [];
+      rec.showtimes.forEach(st => {
+        if (st.date && !m.showtimes.some(es => es.date === st.date && es.time === st.time))
+          m.showtimes.push(st);
+      });
+    });
   }
 })();
 
