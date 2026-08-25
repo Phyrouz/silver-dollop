@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v4.3</title>
+<title>Cinema Aggregator v4.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -214,6 +214,16 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 }
 .no-results { text-align: center; padding: 4rem; color: var(--muted); font-size: 1.1rem; }
 
+.tosee-btn {
+  display:inline-block; margin-left:.4rem; padding:.12rem .45rem;
+  font-family:'Inter',sans-serif; font-size:.65rem; font-weight:600;
+  border:1px solid var(--border); border-radius:10px;
+  background:transparent; color:var(--muted); cursor:pointer;
+  vertical-align:middle; transition:all .15s;
+}
+.tosee-btn:hover { border-color:var(--accent2); color:var(--accent2); }
+.tosee-btn.on { background:var(--accent2); border-color:var(--accent2); color:#fff; }
+
 /* ===== VIEWED ===== */
 .viewed-cb { cursor: pointer; accent-color: var(--green); width: 15px; height: 15px; margin-top: 3px; }
 .movie-card.viewed { opacity: 0.45; }
@@ -253,13 +263,13 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 .planner-movie .pm-venue { font-size: 0.72rem; }
 
 /* Viewed tab count */
-.tab[data-tab="viewed"]::after, .tab[data-tab="schedule"]::after {
+.tab[data-tab="viewed"]::after, .tab[data-tab="schedule"]::after, .tab[data-tab="tosee"]::after {
   content: attr(data-count);
   margin-left: 0.3rem; font-size: 0.65rem;
   background: var(--surface2); color: var(--text); padding: 0.1rem 0.4rem; border-radius: 10px;
   font-weight: 600;
 }
-.tab.active[data-tab="viewed"]::after, .tab.active[data-tab="schedule"]::after {
+.tab.active[data-tab="viewed"]::after, .tab.active[data-tab="schedule"]::after, .tab.active[data-tab="tosee"]::after {
   background: rgba(255,255,255,0.25); color: #fff;
 }
 /* Schedule tab */
@@ -762,7 +772,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.3</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.4</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -770,6 +780,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     <div class="tab" data-tab="planner">Week Planner</div>
     <div class="tab" data-tab="viewed" data-count="0">Viewed</div>
     <div class="tab" data-tab="schedule" data-count="0">My Schedule</div>
+    <div class="tab" data-tab="tosee" data-count="0">To Be Seen</div>
     <div class="tab" data-tab="sources">Add Sources</div>
     <div class="tab" data-tab="help">Help</div>
     <div class="tab" data-tab="admin" id="tab-admin" style="display:none;">Admin</div>
@@ -870,6 +881,17 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
     <div id="schedule-list"></div>
     <div id="cal-container"></div>
+  </div>
+
+  <!-- ===== TO BE SEEN PANEL ===== -->
+  <div id="tosee-panel" class="sched-panel">
+    <div class="cal-toolbar">
+      <div class="cal-title" style="font-size:1rem;font-weight:700;color:var(--text);">To Be Seen</div>
+      <div class="sched-toggle">
+        <label><input type="checkbox" id="tosee-hide-past" onchange="renderToSee()" checked> Hide films with no upcoming showtimes</label>
+      </div>
+    </div>
+    <div id="tosee-list"></div>
   </div>
 
   <!-- ===== ADMIN PANEL ===== -->
@@ -1189,6 +1211,17 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <h2 style="margin-top:2rem;">Version History</h2>
+
+    <div class="help-section">
+      <h3>v4.4 &mdash; 25 August 2026</h3>
+      <ul>
+        <li><strong>New "To Be Seen" watchlist.</strong> Mark any film you intend to catch and it collects in its own tab, with a count badge next to My Schedule. Separate from <em>Viewed</em> (already seen) and <em>My Schedule</em> (calendar-committed) &mdash; this is the "want to see, haven't booked" middle ground.</li>
+        <li>Add or remove from two places: a <strong>To Be Seen</strong> button at the bottom of any film's detail box, or the small &#9734; button on each film card in the grid (no need to open the film first).</li>
+        <li>The tab lists films sorted by <strong>soonest upcoming showtime</strong>, showing the next date, time and format plus a "+N more" hint when there are further screenings. Clicking any row reopens the film box with <strong>Add to Calendar</strong> and <strong>Buy Ticket</strong>; each row also has an &times; to drop it off the list.</li>
+        <li>Films whose showtimes have all passed are hidden by default (toggle at the top to show them). Watchlisted films that are no longer in the loaded listings are grouped separately with a one-click "Clear these".</li>
+        <li>The list persists in <code>cinema_to_see</code> and syncs across devices with the other user data.</li>
+      </ul>
+    </div>
 
     <div class="help-section">
       <h3>v4.3 &mdash; 25 August 2026</h3>
@@ -1618,7 +1651,8 @@ const _origRemoveItem = localStorage.removeItem.bind(localStorage);
 // portfolio's contact email into the search box via the shared sync store. Removed so
 // the cinema app no longer syncs or reads that cross-tool data.
 const USER_KEYS = ['cinema_viewed','cinema_schedule','cinema_profiles','cinema_active_profile',
-  'cinema_netflix_titles','cinema_fav_films','cinema_added_movies','cinema_bfi_showtimes'];
+  'cinema_netflix_titles','cinema_fav_films','cinema_added_movies','cinema_bfi_showtimes',
+  'cinema_to_see'];
 
 // Override localStorage for user-scoped keys
 const origLS = {
@@ -8602,6 +8636,24 @@ function updateViewedCount() {
 }
 updateViewedCount();
 
+// --- "To Be Seen" watchlist (persisted in localStorage) ---
+let toSee = JSON.parse(localStorage.getItem('cinema_to_see') || '{}');
+function toSeeKey(m) { return m.title + '|' + (m.year || ''); }
+function isToSee(m) { return !!toSee[toSeeKey(m)]; }
+function toggleToSee(m) {
+  const k = toSeeKey(m);
+  if (toSee[k]) delete toSee[k]; else toSee[k] = true;
+  localStorage.setItem('cinema_to_see', JSON.stringify(toSee));
+  updateToSeeCount();
+  render();
+}
+function updateToSeeCount() {
+  const c = Object.keys(toSee).length;
+  const t = document.querySelector('.tab[data-tab="tosee"]');
+  if (t) t.dataset.count = c;
+}
+updateToSeeCount();
+
 function vc(venue) {
   if (venue.includes('BFI')) return 'venue-bfi';
   if (venue.includes('Prince')) return 'venue-pcc';
@@ -8747,11 +8799,12 @@ function render() {
   const sourcesPanel = document.getElementById('sources-panel');
   const helpPanel = document.getElementById('help-panel');
   const schedPanel = document.getElementById('schedule-panel');
+  const toseePanel = document.getElementById('tosee-panel');
   const adminPanel = document.getElementById('admin-panel');
 
   // Show/hide sections based on tab
-  const allPanels = [plannerPanel, sourcesPanel, helpPanel, schedPanel, adminPanel];
-  if (['planner','sources','help','schedule','admin'].includes(currentTab)) {
+  const allPanels = [plannerPanel, sourcesPanel, helpPanel, schedPanel, toseePanel, adminPanel];
+  if (['planner','sources','help','schedule','tosee','admin'].includes(currentTab)) {
     grid.style.display = 'none';
     sortBar.style.display = 'none'; filtersEl.style.display = 'none';
     allPanels.forEach(p => p.style.display = 'none');
@@ -8763,6 +8816,7 @@ function render() {
     if (currentTab === 'sources') sourcesPanel.style.display = 'block';
     if (currentTab === 'help') helpPanel.style.display = 'block';
     if (currentTab === 'schedule') { schedPanel.style.display = 'block'; renderSchedule(); }
+    if (currentTab === 'tosee') { toseePanel.style.display = 'block'; renderToSee(); }
     if (currentTab === 'admin') { adminPanel.style.display = 'block'; renderAdminUsers(); loadAdminConfig(); }
     return;
   } else {
@@ -8774,7 +8828,7 @@ function render() {
   const gridCalToolbar = document.getElementById('grid-cal-toolbar');
   const gridCalContainer = document.getElementById('grid-cal-container');
   const gridViewToggle = document.getElementById('grid-view-toggle');
-  if (gridViewMode !== 'grid' && !['planner','sources','help','schedule','admin','viewed'].includes(currentTab)) {
+  if (gridViewMode !== 'grid' && !['planner','sources','help','schedule','tosee','admin','viewed'].includes(currentTab)) {
     grid.style.display = 'none';
     gridCalToolbar.style.display = 'flex';
     gridCalContainer.style.display = '';
@@ -8782,7 +8836,7 @@ function render() {
   } else {
     gridCalToolbar.style.display = 'none';
     gridCalContainer.style.display = 'none';
-    if (gridViewToggle) gridViewToggle.style.display = ['planner','sources','help','schedule','admin','viewed'].includes(currentTab) ? 'none' : '';
+    if (gridViewToggle) gridViewToggle.style.display = ['planner','sources','help','schedule','tosee','admin','viewed'].includes(currentTab) ? 'none' : '';
   }
 
   // Browsers (Chrome/Safari/password managers) ignore autocomplete="off" and inject a
@@ -8881,10 +8935,20 @@ function render() {
         </div>
         <div class="movie-summary">${m.summary}</div>
         <span class="venue-tag ${vc(m.venue)}">${m.venue}</span>
+        <button class="tosee-btn ${isToSee(m) ? 'on' : ''}" data-tosee="${MOVIES.indexOf(m)}"
+                title="${isToSee(m) ? 'Remove from To Be Seen' : 'Add to To Be Seen'}">${isToSee(m) ? '&#9733; To Be Seen' : '&#9734; To Be Seen'}</button>
         <div class="showtimes">${fmtST(m.showtimes, m.venue, m)}</div>
       </div>
     </div>`;
   }).join('');
+
+  // Bookmark buttons
+  grid.querySelectorAll('.tosee-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleToSee(MOVIES[+btn.dataset.tosee]);
+    });
+  });
 
   // Attach checkbox listeners
   grid.querySelectorAll('.viewed-cb').forEach(cb => {
@@ -8923,7 +8987,7 @@ function render() {
   }
 
   // Render grid calendar view if active
-  if (gridViewMode !== 'grid' && !['planner','sources','help','schedule','admin','viewed'].includes(currentTab)) {
+  if (gridViewMode !== 'grid' && !['planner','sources','help','schedule','tosee','admin','viewed'].includes(currentTab)) {
     _renderGridCalendar(f, document.getElementById('grid-cal-container'), document.getElementById('grid-cal-title'));
   }
 }
@@ -9012,10 +9076,27 @@ function showMovieDetail(movie) {
       <div class="det-plot">${truncate(movie.summary, 30)}</div>
       <div class="det-section-title">Showtimes &amp; Tickets</div>
       <div class="det-times">${timesHtml}</div>
+      <div style="margin-top:.7rem;padding-top:.7rem;border-top:1px solid var(--border);">
+        <button class="det-cal-btn" id="det-tosee-btn" style="width:100%;padding:.5rem;${isToSee(movie) ? 'background:var(--accent2);' : 'background:var(--surface2);color:var(--text);'}"
+          onclick="event.stopPropagation();toggleToSee(MOVIES[${idx}]);refreshToSeeBtn(${idx});">
+          ${isToSee(movie) ? '&check; On your To Be Seen list' : '+ To Be Seen'}
+        </button>
+      </div>
     </div>
   </div>`;
 
   document.body.appendChild(overlay);
+}
+
+function refreshToSeeBtn(idx) {
+  const btn = document.querySelector('#det-tosee-btn');
+  if (!btn) return;
+  const m = MOVIES[idx];
+  if (!m) return;
+  const on = isToSee(m);
+  btn.innerHTML = on ? '&check; On your To Be Seen list' : '+ To Be Seen';
+  btn.style.background = on ? 'var(--accent2)' : 'var(--surface2)';
+  btn.style.color = on ? '' : 'var(--text)';
 }
 
 function detCheck() {
@@ -11433,6 +11514,123 @@ function _renderWeekView(container) {
       cell.appendChild(evEl);
     });
   });
+}
+
+// --- "To Be Seen" watchlist tab ---
+function renderToSee() {
+  const el = document.getElementById('tosee-list');
+  if (!el) return;
+  const hidePast = document.getElementById('tosee-hide-past');
+  const hideNoUpcoming = hidePast ? hidePast.checked : true;
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Resolve watchlist keys against the live MOVIES list.
+  const items = [];
+  MOVIES.forEach((m, idx) => {
+    if (!isToSee(m)) return;
+    const future = (m.showtimes || []).filter(st => st.date && st.date >= today);
+    future.sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
+    items.push({ movie: m, idx: idx, next: future[0] || null, upcoming: future.length });
+  });
+
+  // Keys with no matching film left in MOVIES (e.g. data reimported differently).
+  const matched = new Set(items.map(i => toSeeKey(i.movie)));
+  const orphans = Object.keys(toSee).filter(k => !matched.has(k));
+
+  const shown = hideNoUpcoming ? items.filter(i => i.next) : items;
+
+  // Orphan block is built first so it still renders when nothing else matches.
+  let orphanHtml = '';
+  if (orphans.length) {
+    orphanHtml = '<div class="sched-section-title">Not In Current Listings</div>' +
+      '<div class="sched-empty" style="text-align:left;padding:.6rem 1rem;">' +
+      orphans.map(k => k.split('|')[0]).join(', ') +
+      ' &mdash; no longer in the loaded film list. <button class="sc-remove" style="display:inline-block;margin-left:.4rem;width:auto;padding:.1rem .5rem;" ' +
+      'onclick="pruneToSeeOrphans()">Clear these</button></div>';
+  }
+
+  if (!shown.length) {
+    const total = items.length;
+    let msg = '';
+    if (!total && !orphans.length) {
+      msg = 'Nothing on your list yet. Open a film and click <strong>To Be Seen</strong> to add it.';
+    } else if (total && hideNoUpcoming) {
+      msg = total + ' film' + (total > 1 ? 's' : '') + ' on your list, but none have upcoming showtimes. ' +
+            'Untick the box above to see ' + (total > 1 ? 'them' : 'it') + '.';
+    }
+    el.innerHTML = (msg ? '<div class="sched-empty">' + msg + '</div>' : '') + orphanHtml;
+    return;
+  }
+
+  // With upcoming showtimes first (soonest first), then undated ones.
+  const dated = shown.filter(i => i.next).sort((a, b) =>
+    (a.next.date + (a.next.time || '')).localeCompare(b.next.date + (b.next.time || '')));
+  const undated = shown.filter(i => !i.next);
+
+  function row(it) {
+    const m = it.movie;
+    let dateBlock = '<div class="sc-num" style="font-size:.8rem;">&mdash;</div><div class="sc-mon">No date</div>';
+    if (it.next) {
+      try {
+        const dt = new Date(it.next.date + 'T00:00:00');
+        dateBlock = '<div class="sc-day">' + dt.toLocaleDateString('en-GB', { weekday: 'short' }) + '</div>' +
+                    '<div class="sc-num">' + dt.getDate() + '</div>' +
+                    '<div class="sc-mon">' + dt.toLocaleDateString('en-GB', { month: 'short' }) + '</div>';
+      } catch (e) {}
+    }
+    const meta = [m.year || '', m.director ? '&middot; ' + m.director : '', '&middot; ' + m.venue]
+      .filter(Boolean).join(' ');
+    const timeBit = it.next
+      ? it.next.time + (it.next.format && it.next.format !== 'Digital' ? ' &middot; ' + it.next.format : '') +
+        (it.upcoming > 1 ? '  (+' + (it.upcoming - 1) + ' more)' : '')
+      : 'No upcoming showtimes';
+    return '<div class="sched-card' + (it.next ? '' : ' past') + '" data-tosee-idx="' + it.idx + '">' +
+      '<div class="sc-date">' + dateBlock + '</div>' +
+      '<div class="sc-info">' +
+        '<div class="sc-title">' + m.title + '</div>' +
+        '<div class="sc-meta">' + meta + '</div>' +
+        '<div class="sc-meta" style="color:var(--accent2);">' + timeBit + '</div>' +
+      '</div>' +
+      '<button class="sc-remove" title="Remove from To Be Seen" ' +
+        'onclick="event.stopPropagation();removeFromToSee(' + it.idx + ')">&times;</button>' +
+    '</div>';
+  }
+
+  let html = '';
+  if (dated.length) {
+    html += '<div class="sched-section-title">Upcoming</div>' + dated.map(row).join('');
+  }
+  if (undated.length) {
+    html += '<div class="sched-section-title">No Upcoming Showtimes</div>' + undated.map(row).join('');
+  }
+  html += orphanHtml;
+  el.innerHTML = html;
+
+  // Row click reopens the film modal (which carries Add to Calendar / Buy Ticket).
+  el.querySelectorAll('.sched-card[data-tosee-idx]').forEach(card => {
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', function(e) {
+      if (e.target.closest('.sc-remove')) return;
+      showMovieDetail(MOVIES[+card.dataset.toseeIdx]);
+    });
+  });
+}
+
+function removeFromToSee(idx) {
+  const m = MOVIES[idx];
+  if (!m) return;
+  delete toSee[toSeeKey(m)];
+  localStorage.setItem('cinema_to_see', JSON.stringify(toSee));
+  updateToSeeCount();
+  renderToSee();
+}
+
+function pruneToSeeOrphans() {
+  const live = new Set(MOVIES.filter(m => isToSee(m)).map(m => toSeeKey(m)));
+  Object.keys(toSee).forEach(k => { if (!live.has(k)) delete toSee[k]; });
+  localStorage.setItem('cinema_to_see', JSON.stringify(toSee));
+  updateToSeeCount();
+  renderToSee();
 }
 
 function renderSchedule() {
