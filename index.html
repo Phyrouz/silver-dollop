@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v4.4</title>
+<title>Cinema Aggregator v4.6</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -772,7 +772,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.4</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.6</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1211,6 +1211,26 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <h2 style="margin-top:2rem;">Version History</h2>
+
+    <div class="help-section">
+      <h3>v4.6 &mdash; 25 August 2026</h3>
+      <ul>
+        <li><strong>My taste profile is now built into the app.</strong> The 38 directors, 22 films and 16 theme keywords ship inside <code>index.html</code> (<code>MY_TASTE_PROFILE()</code>), so the live site scores correctly on any device or browser with no import step and nothing to restore.</li>
+        <li>Existing installs are upgraded automatically, once per <code>MY_TASTE_VERSION</code>. The upgrade <strong>merges rather than replaces</strong>: entries added by hand, other saved profiles, personal notes, schedules, Viewed and To Be Seen lists are all left intact.</li>
+        <li>To change the taste lists in future, edit <code>MY_TASTE_PROFILE()</code> and increment <code>MY_TASTE_VERSION</code> &mdash; the new values then propagate to every browser on next load.</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v4.5 &mdash; 25 August 2026</h3>
+      <ul>
+        <li><strong>Taste scoring now matches on whole words.</strong> Previously any substring counted, so a profile entry like <em>Persona</em> scored every film whose synopsis contained "personality" or "personal", and a director merely name-dropped in a blurb scored as though they had made the film. Two examples that were sitting at a perfect 10: <em>La Grazia</em> (Paolo Sorrentino) and <em>The Cars That Ate Paris</em> (Peter Weir, whose synopsis mentions Kubrick).</li>
+        <li><strong>Director matches are now weighted by source.</strong> A name in the film's own director field scores +4; a name appearing only in the synopsis scores +2. This keeps genuine untagged retrospective screenings (BFI's Jia Zhangke season, where the director field is blank) ranking well without letting passing references inflate a score.</li>
+        <li><strong>Favourite-film matches are title-only.</strong> A listed favourite no longer scores a different film just for mentioning it in prose.</li>
+        <li>The score tooltip now describes the actual rules and points at the Taste Profiles editor, instead of listing hardcoded director names that no longer reflected the profile.</li>
+        <li>Net effect: perfect-10 films went from 28 to 21 and the top of the ranking is now auteur matches only. Ranking, Top Picks and Week Planner all read this score, so all three improve together.</li>
+      </ul>
+    </div>
 
     <div class="help-section">
       <h3>v4.4 &mdash; 25 August 2026</h3>
@@ -1694,18 +1714,69 @@ function initUsers() {
   }
 }
 
+// ===== MY TASTE PROFILE =====
+// Single source of truth, baked into the app so the live site always has it.
+// Bump MY_TASTE_VERSION after editing to re-apply over an already-stored profile.
+const MY_TASTE_VERSION = 2;
+function MY_TASTE_PROFILE() {
+  return {
+    name: 'Default Profile',
+    films: 'Stalker\nMulholland Drive\nPersona\nCache\nBlue Velvet\nBarry Lyndon\nIn the Mood for Love\nBlow-Up\nSimulant\nBig Trouble in Little China\nAm\u00e9lie\nThe Dictator\nThe Other Guys\n100 Nights of Hero\nPsycho II\nAshes and Diamonds\nCaravaggio\nBut I\'m a Cheerleader\nDo You Love Me\nIt Must Be Heaven\nSherlock Jr.\nPoint Break',
+    directors: 'David Lynch\nIngmar Bergman\nMichael Haneke\nStanley Kubrick\nWong Kar-wai\nAndrei Tarkovsky\nFederico Fellini\nAki Kaurismaki\nAki Kaurism\u00e4ki\nMichelangelo Antonioni\nRobert Bresson\nJia Zhangke\nKelly Reichardt\nPedro Costa\nB\u00e9la Tarr\nBela Tarr\nAndrzej Wajda\nKen Loach\nSergei Loznitsa\nPark Chan-wook\nJoachim Trier\nBi Gan\n\u00d3liver Laxe\nOliver Laxe\nJohn Woo\nKathryn Bigelow\nJean-Pierre Melville\nLana Wachowski\nWachowski\nJim Jarmusch\nBuster Keaton\nDerek Jarman\nAlfred Hitchcock\nVittorio De Sica\nChristopher Nolan\nAlessandro Sossai\nDavid Cronenberg\nWim Wenders',
+    genres: 'arthouse\nsurreal\npsychological\nnoir\nexperimental\nauteur\natmosphere\nvisual style\nexistential\nsocial\nmoral\nambiguity\ndark humour\nalienation\nsocial observation\nunconventional',
+    dislike: 'superhero\nformulaic\nsequel\nfranchise',
+    notes: 'Auteur-driven, psychologically intense cinema. Slow pacing, long takes, ambiguity, unresolved endings preferred.\n\nCinema as cinema: direction, atmosphere, visual language, characterisation, tone, originality and the filmmaker\u2019s point of view matter more than genre alone. Value ambiguity and films that trust the audience. Genre is secondary. Critical reception is supporting evidence only, not the primary criterion. Jarmusch/Kaurism\u00e4ki/Wenders are taste fingerprints \u2014 filmographies already extensively explored.',
+    netflix: []
+  };
+}
+
+// Apply the built-in taste profile to an existing install exactly once per version,
+// so returning users get it without wiping any extra profiles they've made.
+function applyMyTasteUpgrade() {
+  try {
+    const done = +(_origGetItem('cinema_taste_version') || 0);
+    if (done >= MY_TASTE_VERSION) return;
+    const uid = getActiveUser();
+    if (!uid) return;
+    const key = 'u_' + uid + '_cinema_profiles';
+    const profs = JSON.parse(_origGetItem(key) || '{}');
+    const mine = MY_TASTE_PROFILE();
+    const cur = profs.p_default;
+    if (cur) {
+      // Keep anything the user added; only widen the taste lists.
+      const mergeLines = (a, b) => {
+        const out = (a || '').split('\n').map(x => x.trim()).filter(Boolean);
+        const seen = new Set(out.map(x => x.toLowerCase()));
+        (b || '').split('\n').map(x => x.trim()).filter(Boolean).forEach(x => {
+          if (!seen.has(x.toLowerCase())) { out.push(x); seen.add(x.toLowerCase()); }
+        });
+        return out.join('\n');
+      };
+      cur.directors = mergeLines(cur.directors, mine.directors);
+      cur.films = mergeLines(cur.films, mine.films);
+      cur.genres = mergeLines(cur.genres, mine.genres);
+      cur.dislike = mergeLines(cur.dislike, mine.dislike);
+      if (!(cur.notes || '').includes('taste fingerprints')) {
+        cur.notes = ((cur.notes || '').trim() + '\n\n' + mine.notes).trim();
+      }
+      profs.p_default = cur;
+    } else {
+      profs.p_default = mine;
+    }
+    _origSetItem(key, JSON.stringify(profs));
+    if (!_origGetItem('u_' + uid + '_cinema_active_profile')) {
+      _origSetItem('u_' + uid + '_cinema_active_profile', 'p_default');
+    }
+    _origSetItem('cinema_taste_version', String(MY_TASTE_VERSION));
+  } catch (e) {
+    console.warn('Taste profile upgrade skipped:', e && e.message);
+  }
+}
+
 function seedAdminUser() {
   const prefix = 'u_admin_';
   const adminProfile = {
-    p_default: {
-      name: 'Default Profile',
-      films: 'Stalker\nMulholland Drive\nPersona\nCache\nBlue Velvet\nBarry Lyndon\nIn the Mood for Love',
-      directors: 'David Lynch\nIngmar Bergman\nMichael Haneke\nStanley Kubrick\nWong Kar-wai\nAndrei Tarkovsky\nFederico Fellini\nAki Kaurismaki\nMichelangelo Antonioni\nRobert Bresson',
-      genres: 'arthouse\nsurreal\npsychological\nnoir\nexperimental',
-      dislike: 'superhero\nformulaic\nsequel\nfranchise',
-      notes: 'Auteur-driven, psychologically intense cinema. Slow pacing, long takes, ambiguity, unresolved endings preferred.',
-      netflix: []
-    }
+    p_default: MY_TASTE_PROFILE()
   };
   _origSetItem(prefix + 'cinema_profiles', JSON.stringify(adminProfile));
   _origSetItem(prefix + 'cinema_active_profile', 'p_default');
@@ -8415,6 +8486,9 @@ document.getElementById('venue-count').textContent = venues.length;
 // Seed demo user data now that MOVIES is available
 if (window._needDemoSeed) { seedDemoUser(); window._needDemoSeed = false; }
 
+// Apply the built-in taste profile to existing installs (once per MY_TASTE_VERSION).
+applyMyTasteUpgrade();
+
 let currentSort = 'taste_score', currentDir = 'desc', currentTab = 'all';
 
 // --- Grid calendar view state (for All Movies / Top Picks / By Date tabs) ---
@@ -8675,20 +8749,43 @@ function rescoreAll() {
   const disliked = (p.dislike || '').split('\n').map(s => s.trim().toLowerCase()).filter(Boolean);
   const favFilms = (p.films || '').split('\n').map(s => s.trim().toLowerCase()).filter(Boolean);
 
+  // Whole-word test, so "persona" doesn't match "personality" and a director
+  // merely name-dropped in a synopsis doesn't score like the author of the film.
+  function esc(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  function hasWord(haystack, needle) {
+    if (!needle) return false;
+    return new RegExp('(^|[^a-z0-9])' + esc(needle) + '([^a-z0-9]|$)', 'i').test(haystack);
+  }
+
   // Score each movie
   const rawScores = MOVIES.map(m => {
     let score = 5;
     const dir = (m.director || '').toLowerCase();
-    const all = (m.title + ' ' + dir + ' ' + (m.genre||'') + ' ' + (m.summary||'')).toLowerCase();
+    const title = (m.title || '').toLowerCase();
+    const genre = (m.genre || '').toLowerCase();
+    const summary = (m.summary || '').toLowerCase();
+    const titleGenre = title + ' ' + genre;
 
-    // Director match
-    for (const d of lovedDirs) { if (dir.includes(d) || all.includes(d)) { score += 4; break; } }
-    // Genre/theme match
-    for (const g of likedGenres) { if (all.includes(g)) { score += 2; break; } }
-    // Fav film title match
-    for (const f of favFilms) { if (all.includes(f)) { score += 3; break; } }
+    // Director match: the director field is authoritative. A name appearing only in
+    // the synopsis is a weaker signal (retrospectives often leave director empty),
+    // so it earns less and never counts as authorship.
+    let dirBonus = 0;
+    for (const d of lovedDirs) {
+      if (hasWord(dir, d)) { dirBonus = 4; break; }
+      if (!dirBonus && hasWord(summary, d)) dirBonus = 2;
+    }
+    score += dirBonus;
+
+    // Genre/theme keywords: title, genre and summary all count.
+    for (const g of likedGenres) {
+      if (hasWord(titleGenre, g) || hasWord(summary, g)) { score += 2; break; }
+    }
+    // Favourite film: only a real title match counts, not a mention in prose.
+    for (const f of favFilms) { if (hasWord(title, f)) { score += 3; break; } }
     // Dislike penalty
-    for (const d of disliked) { if (all.includes(d)) { score -= 2; break; } }
+    for (const d of disliked) {
+      if (hasWord(titleGenre, d) || hasWord(summary, d)) { score -= 2; break; }
+    }
     // Era bonus
     const yr = parseInt(m.year) || 2025;
     if (yr < 1980) score += 1;
@@ -8716,13 +8813,15 @@ function rescoreAll() {
   render();
 }
 
-const SCORE_INFO = 'Taste Score (1-10): Based on your cinematic profile.\n\n' +
-  'Directors: +4 for loved directors (Lynch, Bergman, Kubrick, Haneke, etc.), +3 for recommended.\n' +
-  'Genre: +2 for arthouse, surreal, noir, psychological.\n' +
-  'Themes: +1-2 for alienation, existential, identity, ambiguity.\n' +
-  'Era: +1 for pre-1980 films.\n' +
-  'European cinema: +1.\n' +
-  'Anti-preference: -2 for formulaic/mainstream.\n\n' +
+const SCORE_INFO = 'Taste Score (1-10): computed from your active Taste Profile.\n\n' +
+  'Base: 5.\n' +
+  'Director: +4 when the film\'s director is on your list; +2 when the name only appears in the synopsis (e.g. an untagged retrospective screening).\n' +
+  'Themes/genres: +2 for any of your genre keywords in the title, genre or synopsis.\n' +
+  'Favourite films: +3 when your listed title matches the film\'s own title.\n' +
+  'Anti-preferences: -2 for any of your dislike keywords.\n' +
+  'Era: +1 for pre-1980 films.\n\n' +
+  'Matching is whole-word, so "persona" does not match "personality".\n' +
+  'Edit the lists under Add Sources \u2192 Taste Profiles to change any of this.\n\n' +
   'Percentile (%): Ranking relative to all movies in this list. 100% = top scored.';
 
 function gauge(score, pctRank) {
