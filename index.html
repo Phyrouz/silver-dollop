@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v4.6</title>
+<title>Cinema Aggregator v4.8</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -772,7 +772,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.6</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.8</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1211,6 +1211,23 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <h2 style="margin-top:2rem;">Version History</h2>
+
+    <div class="help-section">
+      <h3>v4.8 &mdash; 25 August 2026</h3>
+      <ul>
+        <li><strong>Added Yorgos Lanthimos</strong> to the taste profile, and corrected how the profile describes itself. v4.7 split the taste into a "formalist axis" and a separate "raw realism axis" &mdash; that was wrong. Haneke, Lanthimos and Larry Clark share one sensibility: clinical detachment, transgression and cruelty observed with formal control and no editorialising.</li>
+        <li>Theme keywords now reflect that single thread &mdash; detachment, cruelty, discomfort, deadpan, clinical &mdash; alongside the existing set.</li>
+        <li>The upgrade routine can now <strong>retire superseded notes</strong>, so a corrected description replaces the old wording on existing installs instead of accumulating next to it.</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <h3>v4.7 &mdash; 25 August 2026</h3>
+      <ul>
+        <li><strong>Taste profile extended</strong> (<code>MY_TASTE_VERSION</code> 3): added <em>Ken Park</em> plus Larry Clark and Edward Lachman, and the themes it implies &mdash; coming-of-age, adolescence, transgressive, naturalistic, provocation.</li>
+        <li>Notes now record a <strong>second taste axis</strong> beside the formalists: raw, naturalistic cinema about adolescence and social margins, where unflinching realism and provocation are welcome rather than only austere formalism.</li>
+      </ul>
+    </div>
 
     <div class="help-section">
       <h3>v4.6 &mdash; 25 August 2026</h3>
@@ -1717,15 +1734,15 @@ function initUsers() {
 // ===== MY TASTE PROFILE =====
 // Single source of truth, baked into the app so the live site always has it.
 // Bump MY_TASTE_VERSION after editing to re-apply over an already-stored profile.
-const MY_TASTE_VERSION = 2;
+const MY_TASTE_VERSION = 4;
 function MY_TASTE_PROFILE() {
   return {
     name: 'Default Profile',
-    films: 'Stalker\nMulholland Drive\nPersona\nCache\nBlue Velvet\nBarry Lyndon\nIn the Mood for Love\nBlow-Up\nSimulant\nBig Trouble in Little China\nAm\u00e9lie\nThe Dictator\nThe Other Guys\n100 Nights of Hero\nPsycho II\nAshes and Diamonds\nCaravaggio\nBut I\'m a Cheerleader\nDo You Love Me\nIt Must Be Heaven\nSherlock Jr.\nPoint Break',
-    directors: 'David Lynch\nIngmar Bergman\nMichael Haneke\nStanley Kubrick\nWong Kar-wai\nAndrei Tarkovsky\nFederico Fellini\nAki Kaurismaki\nAki Kaurism\u00e4ki\nMichelangelo Antonioni\nRobert Bresson\nJia Zhangke\nKelly Reichardt\nPedro Costa\nB\u00e9la Tarr\nBela Tarr\nAndrzej Wajda\nKen Loach\nSergei Loznitsa\nPark Chan-wook\nJoachim Trier\nBi Gan\n\u00d3liver Laxe\nOliver Laxe\nJohn Woo\nKathryn Bigelow\nJean-Pierre Melville\nLana Wachowski\nWachowski\nJim Jarmusch\nBuster Keaton\nDerek Jarman\nAlfred Hitchcock\nVittorio De Sica\nChristopher Nolan\nAlessandro Sossai\nDavid Cronenberg\nWim Wenders',
-    genres: 'arthouse\nsurreal\npsychological\nnoir\nexperimental\nauteur\natmosphere\nvisual style\nexistential\nsocial\nmoral\nambiguity\ndark humour\nalienation\nsocial observation\nunconventional',
+    films: 'Stalker\nMulholland Drive\nPersona\nCache\nBlue Velvet\nBarry Lyndon\nIn the Mood for Love\nBlow-Up\nSimulant\nBig Trouble in Little China\nAm\u00e9lie\nThe Dictator\nThe Other Guys\n100 Nights of Hero\nPsycho II\nAshes and Diamonds\nCaravaggio\nBut I\'m a Cheerleader\nDo You Love Me\nIt Must Be Heaven\nSherlock Jr.\nPoint Break\nKen Park',
+    directors: 'David Lynch\nIngmar Bergman\nMichael Haneke\nStanley Kubrick\nWong Kar-wai\nAndrei Tarkovsky\nFederico Fellini\nAki Kaurismaki\nAki Kaurism\u00e4ki\nMichelangelo Antonioni\nRobert Bresson\nJia Zhangke\nKelly Reichardt\nPedro Costa\nB\u00e9la Tarr\nBela Tarr\nAndrzej Wajda\nKen Loach\nSergei Loznitsa\nPark Chan-wook\nJoachim Trier\nBi Gan\n\u00d3liver Laxe\nOliver Laxe\nJohn Woo\nKathryn Bigelow\nJean-Pierre Melville\nLana Wachowski\nWachowski\nJim Jarmusch\nBuster Keaton\nDerek Jarman\nAlfred Hitchcock\nVittorio De Sica\nChristopher Nolan\nAlessandro Sossai\nDavid Cronenberg\nWim Wenders\nLarry Clark\nEdward Lachman\nYorgos Lanthimos',
+    genres: 'arthouse\nsurreal\npsychological\nnoir\nexperimental\nauteur\natmosphere\nvisual style\nexistential\nsocial\nmoral\nambiguity\ndark humour\nalienation\nsocial observation\nunconventional\ntransgressive\ndetachment\ncruelty\ndiscomfort\ncoming-of-age\nadolescence\nnaturalistic\nprovocation\ndeadpan\nclinical',
     dislike: 'superhero\nformulaic\nsequel\nfranchise',
-    notes: 'Auteur-driven, psychologically intense cinema. Slow pacing, long takes, ambiguity, unresolved endings preferred.\n\nCinema as cinema: direction, atmosphere, visual language, characterisation, tone, originality and the filmmaker\u2019s point of view matter more than genre alone. Value ambiguity and films that trust the audience. Genre is secondary. Critical reception is supporting evidence only, not the primary criterion. Jarmusch/Kaurism\u00e4ki/Wenders are taste fingerprints \u2014 filmographies already extensively explored.',
+    notes: 'Auteur-driven, psychologically intense cinema. Slow pacing, long takes, ambiguity, unresolved endings preferred.\n\nCinema as cinema: direction, atmosphere, visual language, characterisation, tone, originality and the filmmaker\u2019s point of view matter more than genre alone. Value ambiguity and films that trust the audience. Genre is secondary. Critical reception is supporting evidence only, not the primary criterion. Jarmusch/Kaurism\u00e4ki/Wenders are taste fingerprints \u2014 filmographies already extensively explored.\n\nCore sensibility: clinical detachment and moral discomfort \u2014 transgression and cruelty observed with formal control and without editorialising. Haneke, Lanthimos and Larry Clark (Ken Park) are the same instinct, not separate tastes: the camera withholds judgement and leaves the discomfort with the viewer.',
     netflix: []
   };
 }
@@ -1756,9 +1773,21 @@ function applyMyTasteUpgrade() {
       cur.films = mergeLines(cur.films, mine.films);
       cur.genres = mergeLines(cur.genres, mine.genres);
       cur.dislike = mergeLines(cur.dislike, mine.dislike);
-      if (!(cur.notes || '').includes('taste fingerprints')) {
-        cur.notes = ((cur.notes || '').trim() + '\n\n' + mine.notes).trim();
-      }
+      // Drop superseded paragraphs from earlier profile versions before merging,
+      // so a corrected note replaces the old wording instead of sitting beside it.
+      const SUPERSEDED = ['Second axis alongside the formalists'];
+      SUPERSEDED.forEach(frag => {
+        cur.notes = (cur.notes || '').split('\n\n')
+          .filter(para => !para.includes(frag)).join('\n\n');
+      });
+      // Append any paragraph of the built-in notes that isn't already stored,
+      // so later additions land on installs that already have the earlier text.
+      (mine.notes || '').split('\n\n').map(x => x.trim()).filter(Boolean).forEach(para => {
+        const probe = para.slice(0, 40);
+        if (!(cur.notes || '').includes(probe)) {
+          cur.notes = ((cur.notes || '').trim() + '\n\n' + para).trim();
+        }
+      });
       profs.p_default = cur;
     } else {
       profs.p_default = mine;
