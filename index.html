@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v4.2</title>
+<title>Cinema Aggregator v4.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -762,7 +762,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.2</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.3</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1023,6 +1023,30 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
       <div id="cinema-html-status" class="source-status"></div>
     </div>
 
+    <div class="source-section">
+      <h3>Paste Listings Text</h3>
+      <p>Select the listings on the cinema's What's On page, copy, and paste the raw text here &mdash; no saving or file needed. Both layouts are recognised automatically.</p>
+      <ul style="margin:0.3rem 0 0.6rem 1.2rem;padding:0;font-size:0.85rem;color:var(--muted);">
+        <li><strong>The Garden Cinema</strong> &mdash; title + rating, then <code>Director, Country, Year, 000m.</code>, then <code>Tue 25 Aug</code> / <code>13:40</code> pairs</li>
+        <li><strong>Prince Charles Cinema</strong> &mdash; <code>[Title]</code>, then <code>198571minsJapan(12A)Anime</code>, then <code>* Tuesday 25th August</code> / <code>* Book12:00 pm</code></li>
+        <li>Years are inferred from today's date; <code>SOLD OUT</code> markers and format tags (35mm, 70mm, 4K, SUB) are picked up</li>
+      </ul>
+      <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
+        <label style="font-size:0.85rem;font-weight:600;">Cinema:</label>
+        <select id="paste-text-venue" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:0.45rem;border-radius:6px;font-size:0.85rem;font-family:'Inter',sans-serif;">
+          <option value="auto">Auto-detect</option>
+          <option value="Prince Charles Cinema">Prince Charles Cinema</option>
+          <option value="The Garden Cinema">The Garden Cinema</option>
+        </select>
+      </div>
+      <textarea id="paste-listings" rows="8" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:0.6rem;border-radius:6px;font-family:'Inter',sans-serif;font-size:0.85rem;resize:vertical;" placeholder="Paste the copied listings text here..."></textarea>
+      <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+        <button class="source-btn source-btn-primary" id="paste-listings-btn">Parse &amp; Import</button>
+        <button class="source-btn source-btn-outline" id="paste-listings-clear">Clear</button>
+      </div>
+      <div id="paste-listings-status" class="source-status"></div>
+    </div>
+
     <h2 style="margin-top:2rem;">Taste Profiles</h2>
 
     <!-- Profile selector -->
@@ -1165,6 +1189,16 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <h2 style="margin-top:2rem;">Version History</h2>
+
+    <div class="help-section">
+      <h3>v4.3 &mdash; 25 August 2026</h3>
+      <ul>
+        <li><strong>New "Paste Listings Text" source.</strong> Copy the listings straight off either cinema's What's On page and paste them into Add Sources &mdash; no saving a file, no spreadsheet. Previously plain text could only be imported by hand-building a screenings TSV; the saved-page upload needed an <code>.html</code>/<code>.mhtml</code> file with its original CSS classes intact.</li>
+        <li>Handles both layouts: <strong>The Garden Cinema</strong> (<code>Director, Country, Year, 000m.</code> stats line with <code>Tue 25 Aug</code> / <code>13:40</code> pairs) and <strong>Prince Charles Cinema</strong> (run-on <code>198571minsJapan(12A)Anime</code> metadata with <code>* Book12:00 pm</code> rows). The cinema is auto-detected from the text shape, or can be picked manually.</li>
+        <li>Parses the awkward cases correctly: multi-country lists (<code>Finland, UK, USA</code>), double years (<code>1980, 1982</code> &rarr; 1980), pipe-separated co-directors (<code>Ethan Coen|Joel Coen</code>), glued format tags (<code>4KSUB</code> &rarr; <code>4K SUB</code>), 12-hour times (<code>8:30 pm</code> &rarr; <code>20:30</code>), and <code>SOLD OUT</code> markers.</li>
+        <li>Repeated titles across different days merge into one film rather than duplicating, and results feed the same merge path as the other importers (dedup by date+time+venue, persisted and synced).</li>
+      </ul>
+    </div>
 
     <div class="help-section">
       <h3>v4.2 &mdash; 21 July 2026</h3>
@@ -10211,6 +10245,226 @@ document.querySelectorAll('.tab').forEach(tab => {
     return '';
   }
 
+  // ---------------------------------------------------------------
+  // Plain-text listing parsers (copy/paste from the What's On pages)
+  // ---------------------------------------------------------------
+
+  const TEXT_CERTS = ['U', 'PG', '12', '12A', '15', '18', '16+'];
+  // Screen formats and qualifier tags that appear glued together, e.g. "4KSUB".
+  const TEXT_FORMAT_TAGS = ['35mm', '70mm', '4K', 'DCP', 'SUB', 'HOH', 'Q&A',
+    'Intro', 'PREMIERE', 'LIVE SCORE', 'Sing Along', 'Vid Intro', '£1 MEM'];
+
+  // Split a run-on tag string like "4KSUB" or "35mmIntro" into "4K SUB" / "35mm Intro".
+  function splitFormatTag(tag) {
+    tag = (tag || '').trim();
+    if (!tag) return 'Digital';
+    if (/^35mm\s*\/\s*DCP$/i.test(tag)) return '35mm';
+    const found = [];
+    let rest = tag, changed = true;
+    const byLen = TEXT_FORMAT_TAGS.slice().sort((a, b) => b.length - a.length);
+    while (rest && changed) {
+      changed = false;
+      for (const k of byLen) {
+        if (rest.toUpperCase().indexOf(k.toUpperCase()) === 0) {
+          found.push(k);
+          rest = rest.slice(k.length).trim();
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (rest) found.push(rest);
+    if (!found.length) return 'Digital';
+    // Screen format (35mm/70mm/4K/DCP) leads, qualifiers follow.
+    const isScreen = f => /^(35mm|70mm|4K|DCP)$/i.test(f);
+    found.sort((a, b) => (isScreen(a) ? 0 : 1) - (isScreen(b) ? 0 : 1));
+    return found.join(' ');
+  }
+
+  // Decide which venue a pasted blob came from.
+  function detectVenueFromText(text) {
+    // PCC rows are markdown-ish links plus a run-on metadata line.
+    if (/^\[.+\]\(/m.test(text) && /^\d{0,4}\d+mins/m.test(text)) return 'Prince Charles Cinema';
+    if (/princecharlescinema/i.test(text)) return 'Prince Charles Cinema';
+    // Garden stats lines end in "83m." and dates look like "Tue 25 Aug".
+    if (/^\s*\*?\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{1,2}\s+[A-Z][a-z]{2}\s*$/m.test(text) &&
+        /\d+m\.\s*$/m.test(text)) return 'The Garden Cinema';
+    if (/thegardencinema/i.test(text)) return 'The Garden Cinema';
+    if (/\d+m\.\s*$/m.test(text)) return 'The Garden Cinema';
+    return '';
+  }
+
+  // "Jacques Tati, France, 1953, 83m." -> {director, country, year, duration}
+  // Also handles "180m." (event, no metadata) and trailing double years.
+  function parseGardenStats(line) {
+    const m = line.trim().match(/^(.*?)(\d+)m\.$/);
+    if (!m) return null;
+    const out = { duration: m[2] + 'min' };
+    let head = m[1].replace(/,\s*$/, '').trim();
+    if (!head) return out;
+    let fields = head.split(',').map(s => s.trim()).filter(Boolean);
+    // Peel trailing 4-digit years; the first is the release year.
+    const years = [];
+    while (fields.length && /^\d{4}$/.test(fields[fields.length - 1])) {
+      years.unshift(fields.pop());
+    }
+    if (years.length) out.year = years[0];
+    if (fields.length && fields[fields.length - 1] === 'Various Years') fields.pop();
+    if (fields.length) {
+      out.director = fields[0];
+      if (fields.length > 1) out.country = fields.slice(1).join(', ');
+    }
+    return out;
+  }
+
+  // The Garden Cinema — plain text from the By-Date view.
+  function parseGardenText(text, refDate) {
+    const venue = 'The Garden Cinema';
+    const lines = text.split(/\r?\n/);
+    const byKey = new Map();
+    const reDayHdr = /^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+\d{1,2}\s+[A-Z][a-z]+$/;
+    const reShowDate = /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+([A-Z][a-z]{2})$/;
+    const reTime = /^(\d{1,2}):(\d{2})$/;
+
+    let cur = null, pendingDate = '';
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line || reDayHdr.test(line)) continue;
+
+      const md = line.match(reShowDate);
+      if (md && cur) {
+        const dm = parseDayMonth(md[1] + ' ' + md[2]);
+        pendingDate = dm ? isoDate(inferYear(dm.m, refDate), dm.m, dm.d) : '';
+        continue;
+      }
+
+      const mt = line.match(reTime);
+      if (mt && cur && pendingDate) {
+        let note = '';
+        if (i + 1 < lines.length && /^SOLD OUT/i.test(lines[i + 1].trim())) { note = 'SOLD OUT'; i++; }
+        const st = { date: pendingDate, time: normTime(line) || 'Various', format: 'Digital' };
+        if (note) st.note = note;
+        cur.showtimes.push(st);
+        pendingDate = '';
+        continue;
+      }
+
+      // A stats line ("Director, Country, Year, 000m.") is never a title —
+      // consume it whenever one appears, so repeat listings on later days
+      // don't get mistaken for new films.
+      if (cur && /\d+m\.$/.test(line)) {
+        const stats = parseGardenStats(line);
+        if (stats) {
+          if (stats.director && !cur.director) cur.director = stats.director;
+          if (stats.country && !cur.country) cur.country = stats.country;
+          if (stats.year && !cur.year) cur.year = stats.year;
+          if (stats.duration && !cur.duration) cur.duration = stats.duration;
+          continue;
+        }
+      }
+
+      if (/^Part of /i.test(line)) {
+        const s = line.replace(/^Part of /i, '').trim();
+        if (cur) cur.season = cur.season ? cur.season + '; ' + s : s;
+        continue;
+      }
+      if (/^Screened in partnership with/i.test(line)) continue;
+      if (/…$/.test(line)) continue;           // truncated synopsis
+      if (/^SOLD OUT/i.test(line)) continue;
+
+      // Otherwise a new film title, with an optional trailing certificate.
+      let title = line, cert = '';
+      const sp = line.lastIndexOf(' ');
+      if (sp > 0 && TEXT_CERTS.indexOf(line.slice(sp + 1)) !== -1) {
+        title = line.slice(0, sp).trim();
+        cert = line.slice(sp + 1);
+      }
+      if (!title) continue;
+      const key = title.toLowerCase();
+      cur = byKey.get(key);
+      if (!cur) {
+        cur = { title: title, venue: venue, showtimes: [] };
+        if (cert) cur.certificate = cert;
+        byKey.set(key, cur);
+      }
+      pendingDate = '';
+    }
+
+    return [...byKey.values()];
+  }
+
+  // Prince Charles Cinema — plain text from the What's On page.
+  function parsePCCText(text, refDate) {
+    const venue = 'Prince Charles Cinema';
+    const lines = text.split(/\r?\n/);
+    const films = [];
+    const reTitle = /^\[(.+?)\]\(/;
+    // "198571minsJapan(12A)Anime" / "96mins(15)nondocumentary"
+    const reMeta = /^(\d{4})?(\d+)mins(.*?)\((.+?)\)(.*)$/;
+    const reDir = /^Directed by (.+?)(?:Starring (.+))?$/;
+    const reDate = /^\*?\s*(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day\s+(\d{1,2})(?:st|nd|rd|th)?\s+([A-Z][a-z]+)/;
+    const reShow = /^\*?\s*(?:\[Book|Book|Sold Out)\s*(\d{1,2}):(\d{2})\s*(am|pm)/i;
+
+    let cur = null, pendingDate = '';
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const mTitle = line.match(reTitle);
+      if (mTitle) {
+        cur = { title: mTitle[1].trim(), venue: venue, showtimes: [] };
+        films.push(cur);
+        pendingDate = '';
+        continue;
+      }
+      if (!cur) continue;
+
+      const mMeta = line.match(reMeta);
+      if (mMeta && !cur.duration) {
+        if (mMeta[1]) cur.year = mMeta[1];
+        cur.duration = mMeta[2] + 'min';
+        const country = (mMeta[3] || '').trim();
+        if (country && !/^We can't tell you$/i.test(country)) cur.country = country;
+        cur.certificate = (mMeta[4] || '').trim();
+        const genre = (mMeta[5] || '').trim();
+        if (genre) cur.genre = genre;
+        continue;
+      }
+
+      const mDir = line.match(reDir);
+      if (mDir) {
+        cur.director = mDir[1].replace(/\s*\|\s*/g, ', ').replace(/\s+/g, ' ').trim().replace(/,$/, '');
+        continue;
+      }
+
+      const mDate = line.match(reDate);
+      if (mDate) {
+        const dm = parseDayMonth(mDate[1] + ' ' + mDate[2]);
+        pendingDate = dm ? isoDate(inferYear(dm.m, refDate), dm.m, dm.d) : '';
+        continue;
+      }
+
+      const mShow = line.match(reShow);
+      if (mShow && pendingDate) {
+        const time = normTime(mShow[1] + ':' + mShow[2] + ' ' + mShow[3]);
+        let fmt = 'Digital';
+        // A following bare line (not a bullet/link) is the format tag.
+        if (i + 1 < lines.length) {
+          const nxt = lines[i + 1].trim();
+          if (nxt && nxt.charAt(0) !== '*' && nxt.charAt(0) !== '[') {
+            fmt = splitFormatTag(nxt);
+            i++;
+          }
+        }
+        const st = { date: pendingDate, time: time || 'Various', format: fmt };
+        if (/Sold Out/i.test(line)) st.note = 'SOLD OUT';
+        cur.showtimes.push(st);
+        continue;
+      }
+    }
+    return films;
+  }
+
   document.getElementById('cinema-html-upload').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -10259,6 +10513,55 @@ document.querySelectorAll('.tab').forEach(tab => {
     };
     reader.onerror = function() { setStatus(statusId, 'Could not read the file.', 'error'); };
     reader.readAsText(file);
+  });
+
+  // Parse pasted listings text
+  document.getElementById('paste-listings-btn').addEventListener('click', function() {
+    const statusId = 'paste-listings-status';
+    const ta = document.getElementById('paste-listings');
+    const text = ta.value;
+    if (!text.trim()) {
+      setStatus(statusId, 'Paste the listings text first.', 'error');
+      return;
+    }
+    try {
+      let venue = document.getElementById('paste-text-venue').value;
+      if (venue === 'auto') venue = detectVenueFromText(text);
+      if (!venue) {
+        setStatus(statusId, 'Could not tell which cinema this is. Pick it from the dropdown and try again.', 'error');
+        return;
+      }
+
+      const refDate = new Date();
+      let films = (venue === 'Prince Charles Cinema')
+        ? parsePCCText(text, refDate)
+        : parseGardenText(text, refDate);
+
+      const parsedCount = films.length;
+      films = films.filter(f => f.title && f.showtimes.length);
+      if (!films.length) {
+        setStatus(statusId, 'Recognised ' + venue + ' but found no screenings. Check that dates and times were included in the copied text.', 'error');
+        return;
+      }
+
+      const r = mergeCinemaFilms(films);
+      const totalScreenings = films.reduce((n, f) => n + f.showtimes.length, 0);
+      const dropped = parsedCount - films.length;
+      setStatus(statusId,
+        venue + ': parsed ' + films.length + ' films (' + totalScreenings + ' screenings). ' +
+        r.added + ' new, ' + r.merged + ' updated, ' + r.screenings + ' showtimes added. Total films: ' + MOVIES.length +
+        (dropped > 0 ? ' — ' + dropped + ' entry(s) skipped for having no showtimes.' : ''),
+        'success');
+      localStorage.setItem('last_cinema_fetch', new Date().toISOString());
+      render();
+    } catch (err) {
+      setStatus(statusId, 'Parse failed: ' + err.message, 'error');
+    }
+  });
+
+  document.getElementById('paste-listings-clear').addEventListener('click', function() {
+    document.getElementById('paste-listings').value = '';
+    setStatus('paste-listings-status', '', '');
   });
 
   // Upload CSV
@@ -11297,4 +11600,3 @@ async function generateHelpScreenshots() {
 </script>
 </body>
 </html>
-  
