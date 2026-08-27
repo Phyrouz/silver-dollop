@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v4.8</title>
+<title>Cinema Aggregator v4.9</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -772,7 +772,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.8</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.9</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1059,6 +1059,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
           <option value="auto">Auto-detect</option>
           <option value="Prince Charles Cinema">Prince Charles Cinema</option>
           <option value="The Garden Cinema">The Garden Cinema</option>
+          <option value="BFI Southbank">BFI Southbank</option>
         </select>
       </div>
       <textarea id="paste-listings" rows="8" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:0.6rem;border-radius:6px;font-family:'Inter',sans-serif;font-size:0.85rem;resize:vertical;" placeholder="Paste the copied listings text here..."></textarea>
@@ -1211,6 +1212,15 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <h2 style="margin-top:2rem;">Version History</h2>
+
+    <div class="help-section">
+      <h3>v4.9 &mdash; 26 August 2026</h3>
+      <ul>
+        <li><strong>Fixed: pasting text copied straight off a cinema website imported nothing.</strong> The live pages render titles and showtimes as links &mdash; <code>[Dear You 15](https://…)</code>, <code>[13:05](https://bookings…)</code> &mdash; and the parser only handled bare text, so it reported "found no screenings". A new <code>stripPasteMarkup()</code> removes link syntax, stray URLs and the cookie-banner/navigation furniture that comes with a page copy, before parsing.</li>
+        <li><strong>BFI Southbank can now be imported by pasting text</strong>, not only by uploading the programme PDF. <code>parseBFIText()</code> reads the <code>UK 1971. Dir Nicolas Roeg. 110min</code> credit line and <code>FRI 28 AUG 18:00 NFT1</code> showtimes, and BFI is now an option in the cinema dropdown and in auto-detect.</li>
+        <li><strong>Added a test suite</strong> at <code>parser_tests.html</code> &mdash; 18 tests covering all three venues against the real page formats: markdown-linked titles and times, cookie banners, SOLD OUT markers, multi-country lists, pipe-separated co-directors, glued format tags (<code>4KSUB</code>), 12-hour to 24-hour conversion, and cross-venue mis-detection. Open it in a browser; it loads the app and reports pass/fail.</li>
+      </ul>
+    </div>
 
     <div class="help-section">
       <h3>v4.8 &mdash; 25 August 2026</h3>
@@ -10491,7 +10501,68 @@ document.querySelectorAll('.tab').forEach(tab => {
   }
 
   // Decide which venue a pasted blob came from.
-  function detectVenueFromText(text) {
+  // Strip markdown link syntax so text copied straight off the live site works:
+  // "[Dear You 15](https://…)" -> "Dear You 15", "[13:05](https://…)" -> "13:05".
+  // Also drops bare URLs and the cookie/nav furniture that comes with a page copy.
+  function stripPasteMarkup(text) {
+    return text
+      .replace(/\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/g, '$1')
+      .replace(/^\s*https?:\/\/\S+\s*$/gm, '')
+      .replace(/^\s*\*\s*$/gm, '');
+  }
+
+  // BFI Southbank — text copied from the programme / What's On listing.
+  // Credit line form: "UK 1971. Dir Nicolas Roeg. 110min" and showtimes
+  // "SAT 5 JUL 18:00 NFT1" / "Sat 5 Jul 18:00".
+  function parseBFIText(text, refDate) {
+    const venue = 'BFI Southbank';
+    const lines = stripPasteMarkup(text).split(/\r?\n/);
+    const MON = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+    const reCredit = /^(.+?)\s+(\d{4})\.\s*Dir(?:ector|ected by|s)?\.?\s*([^.]+?)\.(?:\s*(\d+)\s*min)?/i;
+    const reShow = /\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)[A-Z]*\s+(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\s+(\d{1,2}:\d{2})(?:\s+(NFT\d|Studio|Blue\s*Room))?/gi;
+    const films = [];
+    let cur = null;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const mc = line.match(reCredit);
+      if (mc && cur) {
+        cur.country = mc[1].trim();
+        cur.year = mc[2];
+        cur.director = mc[3].trim();
+        if (mc[4]) cur.duration = mc[4] + 'min';
+        continue;
+      }
+      // showtimes may sit on their own line or trail the credit line
+      let m, found = false;
+      reShow.lastIndex = 0;
+      while ((m = reShow.exec(line))) {
+        found = true;
+        if (!cur) continue;
+        const mon = MON[m[2].slice(0,3).toLowerCase()];
+        if (!mon) continue;
+        const ref = refDate || new Date();
+        let y = ref.getFullYear();
+        if (mon < (ref.getMonth() + 1) - 1) y += 1;
+        const iso = y + '-' + String(mon).padStart(2,'0') + '-' + String(parseInt(m[1],10)).padStart(2,'0');
+        const st = { date: iso, time: m[3], format: (m[4] || 'Digital').replace(/\s+/g,' ') };
+        if (!cur.showtimes.some(x => x.date === st.date && x.time === st.time))
+          cur.showtimes.push(st);
+      }
+      if (found) continue;
+      if (/^\d{1,2}:\d{2}$/.test(line)) continue;
+      if (/…$/.test(line)) continue;
+      if (/^(Tickets|Book|Member|Join|BFI |See p|£)/i.test(line)) continue;
+      // otherwise: a new title
+      cur = { title: line.replace(/\s+\d{1,2}(?:A)?$/,'').trim(), venue: venue, showtimes: [] };
+      films.push(cur);
+    }
+    return films.filter(f => f.title);
+  }
+
+  // Exposed for parser_tests.html
+  function detectVenueFromText(rawText) {
+    const text = stripPasteMarkup(rawText) + '\n' + rawText;
     // PCC rows are markdown-ish links plus a run-on metadata line.
     if (/^\[.+\]\(/m.test(text) && /^\d{0,4}\d+mins/m.test(text)) return 'Prince Charles Cinema';
     if (/princecharlescinema/i.test(text)) return 'Prince Charles Cinema';
@@ -10499,6 +10570,9 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (/^\s*\*?\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{1,2}\s+[A-Z][a-z]{2}\s*$/m.test(text) &&
         /\d+m\.\s*$/m.test(text)) return 'The Garden Cinema';
     if (/thegardencinema/i.test(text)) return 'The Garden Cinema';
+    // BFI: "UK 1971. Dir Nicolas Roeg." credit lines, NFT screens, bfi.org.uk
+    if (/\bNFT[123]\b/.test(text) || /bfi\.org/i.test(text) ||
+        /^.+\s+\d{4}\.\s*Dir(?:ector|ected by|s)?\.?\s+[^.]+\./mi.test(text)) return 'BFI Southbank';
     if (/\d+m\.\s*$/m.test(text)) return 'The Garden Cinema';
     return '';
   }
@@ -10529,7 +10603,7 @@ document.querySelectorAll('.tab').forEach(tab => {
   // The Garden Cinema — plain text from the By-Date view.
   function parseGardenText(text, refDate) {
     const venue = 'The Garden Cinema';
-    const lines = text.split(/\r?\n/);
+    const lines = stripPasteMarkup(text).split(/\r?\n/);
     const byKey = new Map();
     const reDayHdr = /^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+\d{1,2}\s+[A-Z][a-z]+$/;
     const reShowDate = /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+([A-Z][a-z]{2})$/;
@@ -10605,7 +10679,7 @@ document.querySelectorAll('.tab').forEach(tab => {
   // Prince Charles Cinema — plain text from the What's On page.
   function parsePCCText(text, refDate) {
     const venue = 'Prince Charles Cinema';
-    const lines = text.split(/\r?\n/);
+    const lines = text.split(/\r?\n/);   // PCC titles rely on the [Title](url) form
     const films = [];
     const reTitle = /^\[(.+?)\]\(/;
     // "198571minsJapan(12A)Anime" / "96mins(15)nondocumentary"
@@ -10725,6 +10799,8 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 
   // Parse pasted listings text
+  window.__T = { detectVenueFromText, parseGardenText, parsePCCText, parseBFIText, stripPasteMarkup, splitFormatTag };
+
   document.getElementById('paste-listings-btn').addEventListener('click', function() {
     const statusId = 'paste-listings-status';
     const ta = document.getElementById('paste-listings');
@@ -10742,9 +10818,10 @@ document.querySelectorAll('.tab').forEach(tab => {
       }
 
       const refDate = new Date();
-      let films = (venue === 'Prince Charles Cinema')
-        ? parsePCCText(text, refDate)
-        : parseGardenText(text, refDate);
+      let films;
+      if (venue === 'Prince Charles Cinema') films = parsePCCText(text, refDate);
+      else if (venue === 'BFI Southbank') films = parseBFIText(text, refDate);
+      else films = parseGardenText(text, refDate);
 
       const parsedCount = films.length;
       films = films.filter(f => f.title && f.showtimes.length);
