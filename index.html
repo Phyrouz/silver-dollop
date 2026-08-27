@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v4.9</title>
+<title>Cinema Aggregator v5.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -772,7 +772,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v4.9</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v5.0</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1212,6 +1212,16 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     </div>
 
     <h2 style="margin-top:2rem;">Version History</h2>
+
+    <div class="help-section">
+      <h3>v5.0 &mdash; 27 August 2026</h3>
+      <ul>
+        <li><strong>Fixed: newly imported screenings never appeared, on any date or venue.</strong> Filtering a day such as 28 August returned "No movies match your filters" even though the screenings were present in storage. On load, imported films were de-duplicated <strong>by title alone</strong>: if any film of that name already existed, the incoming record was discarded outright &mdash; taking its showtimes with it. Records are now keyed on <strong>title + venue</strong>, and a colliding record has its showtimes <strong>merged</strong> instead of being thrown away. The same fix is applied to the manual "add movies" path.</li>
+        <li><strong>Fixed: country names were being written into the venue field.</strong> The manual/CSV line parser split on commas and dropped the fifth field into <code>venue</code>, so a film credited "USA, Canada" was filed under venue "USA". Those phantom records then shadowed the real cinema listing and polluted the venue filter. Only the three real venues are accepted now; anything else is treated as country data.</li>
+        <li><strong>Existing corrupt records self-heal on load</strong> &mdash; a record whose venue is a country is folded into the real cinema record of the same title rather than hiding it.</li>
+        <li><strong>Test coverage:</strong> <code>filter_tests.html</code> now holds 19 tests, including four regressions written against the exact reported failure (verified to fail before the fix and pass after), plus exhaustive sweeps over every future date and every date&times;venue combination. <code>parser_tests.html</code> remains at 18. Both suites green.</li>
+      </ul>
+    </div>
 
     <div class="help-section">
       <h3>v4.9 &mdash; 26 August 2026</h3>
@@ -9461,26 +9471,52 @@ document.querySelectorAll('.tab').forEach(tab => {
     el.textContent = msg;
   }
 
+  // The three real venues. Anything else in a `venue` field is corruption from an
+  // old comma-split import that shifted a country into the venue slot.
+  const CANON_VENUES = ['BFI Southbank', 'Prince Charles Cinema', 'The Garden Cinema'];
+  function isRealVenue(v) { return CANON_VENUES.indexOf(v) !== -1; }
+  // Identity for dedupe: title + venue, so the same film at two cinemas stays
+  // two records, but a re-import of the same listing merges instead of duplicating.
+  function movieKey(m) {
+    return (m.title || '').trim().toLowerCase() + '|' + (m.venue || '').trim().toLowerCase();
+  }
+  // Merge b's showtimes into a, de-duplicating on date+time, and backfill blanks.
+  function absorbMovie(a, b) {
+    if (!a.showtimes) a.showtimes = [];
+    (b.showtimes || []).forEach(st => {
+      if (!a.showtimes.some(x => x.date === st.date && x.time === st.time)) a.showtimes.push(st);
+    });
+    ['director', 'country', 'duration', 'summary', 'poster_url', 'genre'].forEach(k => {
+      if (!a[k] && b[k]) a[k] = b[k];
+    });
+    return a;
+  }
+
   function parseMovieLine(line) {
     const parts = line.split(',').map(s => s.trim());
     if (!parts[0]) return null;
     return {
       title: parts[0], year: parts[1] || '', director: parts[2] || '',
-      genre: parts[3] || 'Drama', summary: '', venue: parts[4] || 'Manual',
-      country: '', duration: '', showtimes: [], poster_url: '',
+      genre: parts[3] || 'Drama', summary: '',
+      // Only accept a real cinema here. A bare comma-split used to drop a country
+      // ("USA", "Spain", "Poland") into venue, which then shadowed the real listing.
+      venue: isRealVenue(parts[4]) ? parts[4] : 'Manual',
+      country: isRealVenue(parts[4]) ? (parts[5] || '') : (parts.slice(4).filter(Boolean).join(', ')),
+      duration: '', showtimes: [], poster_url: '',
       taste_score: 5, taste_pct: 5, next_date: ''
     };
   }
 
   function addMoviesToList(newMovies) {
-    const existing = new Set(MOVIES.map(m => m.title.toLowerCase()));
+    const byKey = new Map();
+    MOVIES.forEach(m => byKey.set(movieKey(m), m));
     let added = 0;
     newMovies.forEach(m => {
-      if (!existing.has(m.title.toLowerCase())) {
-        MOVIES.push(m);
-        existing.add(m.title.toLowerCase());
-        added++;
-      }
+      const hit = byKey.get(movieKey(m));
+      if (hit) { absorbMovie(hit, m); return; }
+      MOVIES.push(m);
+      byKey.set(movieKey(m), m);
+      added++;
     });
     // Save added movies to localStorage so they persist on reload
     const saved = JSON.parse(localStorage.getItem('cinema_added_movies') || '[]');
@@ -10800,6 +10836,11 @@ document.querySelectorAll('.tab').forEach(tab => {
 
   // Parse pasted listings text
   window.__T = { detectVenueFromText, parseGardenText, parsePCCText, parseBFIText, stripPasteMarkup, splitFormatTag };
+  // Exposed for filter_tests.html — read-only handles onto live state.
+  // NB: cannot define window.MOVIES (a top-level `let MOVIES` already shadows it),
+  // so tests read window.__MOVIES() instead.
+  window.__MOVIES = () => MOVIES;
+  window.render = render;
 
   document.getElementById('paste-listings-btn').addEventListener('click', function() {
     const statusId = 'paste-listings-status';
@@ -10991,12 +11032,26 @@ document.querySelectorAll('.tab').forEach(tab => {
   // Restore previously added movies from localStorage on load
   const savedMovies = JSON.parse(localStorage.getItem('cinema_added_movies') || '[]');
   if (savedMovies.length) {
-    const existing = new Set(MOVIES.map(m => m.title.toLowerCase()));
-    savedMovies.forEach(m => {
-      if (!existing.has(m.title.toLowerCase())) {
-        MOVIES.push(m);
-        existing.add(m.title.toLowerCase());
+    // Dedupe on title+VENUE (not title alone). Deduping by title used to discard a
+    // real imported listing whenever any film of the same name already existed —
+    // silently throwing away its showtimes, so freshly imported dates never appeared.
+    const byKey = new Map();
+    MOVIES.forEach(m => byKey.set(movieKey(m), m));
+    // Records whose venue is a real cinema win; legacy rows whose venue got a country
+    // written into it are absorbed into the real record rather than shadowing it.
+    const good = savedMovies.filter(m => isRealVenue(m.venue));
+    const rest = savedMovies.filter(m => !isRealVenue(m.venue));
+    good.concat(rest).forEach(m => {
+      const k = movieKey(m);
+      const hit = byKey.get(k);
+      if (hit) { absorbMovie(hit, m); return; }
+      // A corrupt-venue row with no real counterpart: fold its showtimes into any
+      // same-titled real record if one exists, otherwise keep it as-is.
+      if (!isRealVenue(m.venue)) {
+        const sameTitle = MOVIES.find(x => x.title.toLowerCase() === (m.title||'').toLowerCase() && isRealVenue(x.venue));
+        if (sameTitle) { absorbMovie(sameTitle, m); return; }
       }
+      MOVIES.push(m); byKey.set(k, m);
     });
     document.getElementById('movie-count').textContent = MOVIES.length;
   }
