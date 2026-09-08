@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v5.1</title>
+<title>Cinema Aggregator v5.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -772,7 +772,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v5.1</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v5.2</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1214,6 +1214,12 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     <h2 style="margin-top:2rem;">Version History</h2>
 
     <div class="help-section">
+      <h3>v5.2 &mdash; 8 September 2026</h3>
+      <ul>
+        <li><strong>Fixed: the screenings TSV importer collapsed a film's venues into one.</strong> Rows were grouped by <code>title|year</code> only, so a festival film playing several venues (All of a Sudden: BFI Southbank on 10 Oct, Royal Festival Hall on 18 Oct) became ONE record stamped with whichever venue was read first &mdash; the film then vanished from every other venue's filter, and its screenings piled onto the wrong card as apparent duplicates. Filtering the Royal Festival Hall showed 2 films instead of 27. The group key, the existing-record lookup and the localStorage key are now all <code>title|year|cinema</code>, matching <code>movieKey()</code>'s title+venue identity used elsewhere.</li>
+        <li>Extracted the CSV/TSV import into <code>importCsvText(text, fileName)</code> (exposed as <code>window.__importCsvText</code>) so tests can drive the real import path with a string instead of a File. The upload handler now just reads the file and calls it.</li>
+        <li>New test suite <code>import_tests.html</code> &mdash; 5 tests that import the actual festival TSV through the real code path and assert per-venue records, no duplicate showtimes, every venue's films filed correctly, and the venue filter rendering them on screen. Verified red against v5.1 (1 passed, 4 failed) before the fix.</li>
+      </ul>
       <h3>v5.1 &mdash; 8 September 2026</h3>
       <ul>
         <li>BFI London Film Festival venues are now first-class venues. <code>CANON_VENUES</code> only listed the 3 year-round cinemas, so a festival screening at a venue like <code>Southbank Centre, Royal Festival Hall</code> failed <code>isRealVenue()</code> and was treated as the old country-in-venue corruption &mdash; on reload the loader folded it into a same-titled record or left it unfilterable. Added <code>FESTIVAL_VENUES</code> (19 LFF venues: Royal Festival Hall, BFI IMAX, Curzon Soho 1&ndash;3, Curzon Mayfair, Vue West End EPIC 1&ndash;2 and Screens 5&ndash;7, ICA, St Martin-in-the-Fields, Rich Mix, Barbican, Genesis, Everyman Screen on the Green, Cine Lumiere, Royal Albert Hall) with <code>ALL_VENUES</code> now backing <code>isRealVenue()</code>.</li>
@@ -10979,12 +10985,10 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 
   // Upload CSV
-  document.getElementById('csv-upload').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(ev) {
-      const text = ev.target.result;
+  // Extracted so tests can drive the real import path with a string instead of
+  // a File. The change handler below just reads the file and calls this.
+  function importCsvText(text, fileName) {
+    {
       const rawLines = text.split(/\r?\n/).map(s => s.trimEnd()).filter(l => l.trim());
       if (!rawLines.length) {
         setStatus('csv-status', 'File is empty.', 'error');
@@ -11031,7 +11035,13 @@ document.querySelectorAll('.tab').forEach(tab => {
           const title = (cells[col.title] || '').trim();
           if (!title) continue;
           const year = (col.year >= 0 ? (cells[col.year] || '') : '').trim();
-          const key = title.toLowerCase() + '|' + year;
+          const rowVenue = (col.cinema >= 0 ? (cells[col.cinema] || '') : '').trim() || 'Unknown';
+          // Key on venue too. A festival film legitimately plays several venues
+          // (e.g. BFI Southbank on the 10th, Royal Festival Hall on the 18th);
+          // keying on title|year alone collapsed those into ONE record stamped
+          // with whichever venue appeared first, so the film vanished from every
+          // other venue's filter. This matches movieKey()'s title+venue identity.
+          const key = title.toLowerCase() + '|' + year + '|' + rowVenue.toLowerCase();
           let movie = movieMap.get(key);
           if (!movie) {
             const runtime = (col.runtime >= 0 ? (cells[col.runtime] || '') : '').trim();
@@ -11041,7 +11051,7 @@ document.querySelectorAll('.tab').forEach(tab => {
               director: (col.director >= 0 ? (cells[col.director] || '') : '').trim(),
               genre: 'Drama',
               summary: '',
-              venue: (col.cinema >= 0 ? (cells[col.cinema] || '') : '').trim() || 'Unknown',
+              venue: rowVenue,
               country: (col.country >= 0 ? (cells[col.country] || '') : '').trim(),
               duration: runtime ? runtime + 'min' : '',
               showtimes: [],
@@ -11070,10 +11080,13 @@ document.querySelectorAll('.tab').forEach(tab => {
         }
 
         // Merge into MOVIES: existing films get showtimes appended, new films pushed
-        const existing = new Map(MOVIES.map(m => [m.title.toLowerCase() + '|' + (m.year || ''), m]));
+        const exKey = m => m.title.toLowerCase() + '|' + (m.year || '') + '|' + (m.venue || '').toLowerCase();
+        const existing = new Map(MOVIES.map(m => [exKey(m), m]));
         let addedNew = 0, mergedExisting = 0;
         movieMap.forEach((nm, key) => {
-          const ex = existing.get(key) || existing.get(nm.title.toLowerCase() + '|');
+          // same title+venue, year unknown on the existing record
+          const ex = existing.get(key) ||
+                     existing.get(nm.title.toLowerCase() + '||' + (nm.venue || '').toLowerCase());
           if (ex) {
             // Merge showtimes
             const have = new Set((ex.showtimes || []).map(s => s.date + '_' + s.time + '_' + (s.venue || '')));
@@ -11095,7 +11108,7 @@ document.querySelectorAll('.tab').forEach(tab => {
 
         // Persist
         const saved = JSON.parse(localStorage.getItem('cinema_added_movies') || '[]');
-        const savedKeys = new Set(saved.map(s => s.title.toLowerCase() + '|' + (s.year || '')));
+        const savedKeys = new Set(saved.map(s => exKey(s)));
         movieMap.forEach((nm, key) => {
           if (!savedKeys.has(key)) { saved.push(nm); savedKeys.add(key); }
         });
@@ -11104,16 +11117,24 @@ document.querySelectorAll('.tab').forEach(tab => {
         rescoreAll();
         document.getElementById('movie-count').textContent = MOVIES.length;
         if (typeof rebuildVenueFilter === 'function') rebuildVenueFilter();
-        setStatus('csv-status', 'Parsed ' + rowCount + ' screenings across ' + movieMap.size + ' films from ' + file.name + ' &mdash; added ' + addedNew + ' new, merged ' + mergedExisting + ' existing. Total: ' + MOVIES.length, 'success');
+        setStatus('csv-status', 'Parsed ' + rowCount + ' screenings across ' + movieMap.size + ' films from ' + (fileName || 'file') + ' &mdash; added ' + addedNew + ' new, merged ' + mergedExisting + ' existing. Total: ' + MOVIES.length, 'success');
       } else {
         // -- Fallback: simple CSV / text format --
         let start = 0;
         if (rawLines[0] && rawLines[0].toLowerCase().includes('title')) start = 1;
         const movies = rawLines.slice(start).map(parseMovieLine).filter(Boolean);
         const added = addMoviesToList(movies);
-        setStatus('csv-status', 'Added ' + added + ' new movies from ' + file.name + '. Total: ' + MOVIES.length, 'success');
+        setStatus('csv-status', 'Added ' + added + ' new movies from ' + (fileName || 'file') + '. Total: ' + MOVIES.length, 'success');
       }
-    };
+    }
+  }
+  window.__importCsvText = importCsvText;
+
+  document.getElementById('csv-upload').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) { importCsvText(ev.target.result, file.name); };
     reader.readAsText(file);
   });
 
@@ -12147,3 +12168,4 @@ async function generateHelpScreenshots() {
 </script>
 </body>
 </html>
+  §
