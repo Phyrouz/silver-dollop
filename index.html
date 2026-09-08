@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v5.0</title>
+<title>Cinema Aggregator v5.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -772,7 +772,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v5.0</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v5.1</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1214,6 +1214,14 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     <h2 style="margin-top:2rem;">Version History</h2>
 
     <div class="help-section">
+      <h3>v5.1 &mdash; 8 September 2026</h3>
+      <ul>
+        <li>BFI London Film Festival venues are now first-class venues. <code>CANON_VENUES</code> only listed the 3 year-round cinemas, so a festival screening at a venue like <code>Southbank Centre, Royal Festival Hall</code> failed <code>isRealVenue()</code> and was treated as the old country-in-venue corruption &mdash; on reload the loader folded it into a same-titled record or left it unfilterable. Added <code>FESTIVAL_VENUES</code> (19 LFF venues: Royal Festival Hall, BFI IMAX, Curzon Soho 1&ndash;3, Curzon Mayfair, Vue West End EPIC 1&ndash;2 and Screens 5&ndash;7, ICA, St Martin-in-the-Fields, Rich Mix, Barbican, Genesis, Everyman Screen on the Green, Cine Lumiere, Royal Albert Hall) with <code>ALL_VENUES</code> now backing <code>isRealVenue()</code>.</li>
+        <li>Fixed <code>parseMovieLine</code> corrupting venue names that contain a comma. It splits the line on commas, so <code>Southbank Centre, Royal Festival Hall</code> became venue <code>Southbank Centre</code> with the rest shifted into <code>country</code>. New <code>matchVenueFrom()</code> greedily re-joins up to 3 comma-split pieces into a known venue name before testing, and reports how many it consumed so <code>country</code> reads from the right offset. The v5.0 guard against a country landing in the venue slot (<code>USA, Canada</code>) still rejects it.</li>
+        <li><strong>Fixed: imported venues never appeared in the venue filter.</strong> The dropdown was built once at startup from the built-in films, before saved listings were merged, so any imported venue was missing from it &mdash; and selecting a missing option silently leaves the filter blank, which is why a festival venue appeared to return every film for the date. New <code>rebuildVenueFilter()</code> repopulates it (and the venue count) after every merge, and includes showtime-level venues.</li>
+        <li><strong>Fixed: venue + date range were evaluated independently.</strong> A film playing venue A on the 7th and venue B on the 9th wrongly matched "venue A + 9th", because the venue test looked at the record while the date test looked at the showtimes. Both conditions must now be satisfied by the <em>same</em> showtime. Latent in v5.0 &mdash; year-round films only ever play their own venue, so it surfaced once festival films carried per-screening venues.</li>
+        <li>3 new tests in <code>filter_tests.html</code> (22 total) covering venue recognition, the comma case, and end-to-end load-and-filter for a festival venue. Verified red against v5.0 before the fix.</li>
+      </ul>
       <h3>v5.0 &mdash; 27 August 2026</h3>
       <ul>
         <li><strong>Fixed: newly imported screenings never appeared, on any date or venue.</strong> Filtering a day such as 28 August returned "No movies match your filters" even though the screenings were present in storage. On load, imported films were de-duplicated <strong>by title alone</strong>: if any film of that name already existed, the incoming record was discarded outright &mdash; taking its showtimes with it. Records are now keyed on <strong>title + venue</strong>, and a colliding record has its showtimes <strong>merged</strong> instead of being thrown away. The same fix is applied to the manual "add movies" path.</li>
@@ -8515,9 +8523,30 @@ MOVIES.forEach(m => {
 });
 
 // --- Populate filters ---
-const venues = [...new Set(MOVIES.map(m => m.venue))].sort();
-const vSel = document.getElementById('venue-filter');
-venues.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; vSel.appendChild(o); });
+// The venue dropdown must be rebuilt AFTER saved listings load, otherwise it
+// only ever lists the built-in venues and an imported one (e.g. a festival
+// venue) can never be selected — setting .value to a missing option silently
+// leaves the filter blank. Showtime-level venues count too, since a festival
+// film's record venue differs from where each screening plays.
+function rebuildVenueFilter() {
+  const vSel = document.getElementById('venue-filter');
+  if (!vSel) return;
+  const set = new Set();
+  MOVIES.forEach(m => {
+    if (m.venue) set.add(m.venue);
+    (m.showtimes || []).forEach(s => { if (s.venue) set.add(s.venue); });
+  });
+  const keep = vSel.value;
+  vSel.innerHTML = '<option value="">All Venues</option>';
+  [...set].sort().forEach(v => {
+    const o = document.createElement('option'); o.value = v; o.textContent = v; vSel.appendChild(o);
+  });
+  if (keep && set.has(keep)) vSel.value = keep;
+  const vc = document.getElementById('venue-count');
+  if (vc) vc.textContent = set.size;
+}
+window.rebuildVenueFilter = rebuildVenueFilter;
+rebuildVenueFilter();
 
 const allGenres = new Set();
 MOVIES.forEach(m => (m.genre||'').split(/[,\/]/).forEach(g => { const t = g.trim(); if(t) allGenres.add(t); }));
@@ -8530,7 +8559,7 @@ const cSel = document.getElementById('country-filter');
 [...allCountries].sort().forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; cSel.appendChild(o); });
 
 document.getElementById('movie-count').textContent = MOVIES.length;
-document.getElementById('venue-count').textContent = venues.length;
+// venue count comes from the same set the dropdown uses, so it stays right after imports
 
 // Seed demo user data now that MOVIES is available
 if (window._needDemoSeed) { seedDemoUser(); window._needDemoSeed = false; }
@@ -9005,17 +9034,25 @@ function render() {
 
   let f = MOVIES.filter(m => {
     if (search && !(m.title+' '+m.director+' '+m.genre+' '+m.summary+' '+m.venue).toLowerCase().includes(search)) return false;
-    if (vF && m.venue !== vF) return false;
+    // Venue test. A showtime may carry its own venue (festival films play many
+    // venues), so a record qualifies if its own venue matches OR any showtime is
+    // at that venue. When a date range is also set, the combined venue+date test
+    // below is what decides — this is only a cheap pre-filter.
+    if (vF && m.venue !== vF && !(m.showtimes||[]).some(s => (s.venue || m.venue) === vF)) return false;
     if (gF && !(m.genre||'').toLowerCase().includes(gF.toLowerCase())) return false;
     if (cF && !(m.country||'').toLowerCase().includes(cF.toLowerCase())) return false;
     if (m.taste_score < minS) return false;
     // Date range filter: only show movies with at least one showtime in the selected range
     if (dateFrom || dateTo) {
       if (!m.showtimes || m.showtimes.length === 0) return false;
+      // Date and venue must be satisfied by the SAME showtime, otherwise a film
+      // playing venue A on the 7th and venue B on the 9th wrongly matches
+      // "venue A + 9th". Only the date is checked when no venue is selected.
       const hasMatch = m.showtimes.some(s => {
         if (!s.date) return false;
         if (dateFrom && s.date < dateFrom) return false;
         if (dateTo && s.date > dateTo) return false;
+        if (vF && (s.venue || m.venue) !== vF) return false;
         return true;
       });
       if (!hasMatch) return false;
@@ -9474,7 +9511,34 @@ document.querySelectorAll('.tab').forEach(tab => {
   // The three real venues. Anything else in a `venue` field is corruption from an
   // old comma-split import that shifted a country into the venue slot.
   const CANON_VENUES = ['BFI Southbank', 'Prince Charles Cinema', 'The Garden Cinema'];
-  function isRealVenue(v) { return CANON_VENUES.indexOf(v) !== -1; }
+  // BFI London Film Festival venues. The festival programme spans venues that are
+  // not year-round cinemas, so they are listed separately but are equally real:
+  // a screening at the Royal Festival Hall must survive load and be filterable,
+  // not be mistaken for the old country-in-venue corruption. Names match the
+  // official LFF listings (bfi.org.uk/lff), commas included.
+  const FESTIVAL_VENUES = [
+    'Southbank Centre, Royal Festival Hall',
+    'BFI IMAX',
+    'Curzon Soho, Screen 1',
+    'Curzon Soho, Screen 2',
+    'Curzon Soho, Screen 3',
+    'Curzon Mayfair',
+    'Vue West End, EPIC 1',
+    'Vue West End, EPIC 2',
+    'Vue West End, Screen 5',
+    'Vue West End, Screen 6',
+    'Vue West End, Screen 7',
+    'Institute of Contemporary Arts (ICA)',
+    'St Martin-in-the-Fields',
+    'Rich Mix',
+    'Barbican',
+    'Genesis Cinema',
+    'Everyman Screen on the Green',
+    'Cine Lumiere',
+    'Royal Albert Hall'
+  ];
+  const ALL_VENUES = CANON_VENUES.concat(FESTIVAL_VENUES);
+  function isRealVenue(v) { return ALL_VENUES.indexOf(v) !== -1; }
   // Identity for dedupe: title + venue, so the same film at two cinemas stays
   // two records, but a re-import of the same listing merges instead of duplicating.
   function movieKey(m) {
@@ -9492,16 +9556,32 @@ document.querySelectorAll('.tab').forEach(tab => {
     return a;
   }
 
+  // A comma-split line breaks venue names that legitimately contain a comma.
+  // Try the longest run of pieces starting at `i` that spells a known venue;
+  // returns {venue, span} where span is how many pieces it consumed.
+  function matchVenueFrom(parts, i) {
+    for (let n = 3; n >= 1; n--) {
+      const slice = parts.slice(i, i + n).filter(Boolean);
+      const cand = slice.join(', ');
+      if (cand && isRealVenue(cand)) return { venue: cand, span: slice.length };
+    }
+    return { venue: '', span: 1 };
+  }
+
   function parseMovieLine(line) {
     const parts = line.split(',').map(s => s.trim());
     if (!parts[0]) return null;
+    const vm = matchVenueFrom(parts, 4);
     return {
       title: parts[0], year: parts[1] || '', director: parts[2] || '',
       genre: parts[3] || 'Drama', summary: '',
       // Only accept a real cinema here. A bare comma-split used to drop a country
       // ("USA", "Spain", "Poland") into venue, which then shadowed the real listing.
-      venue: isRealVenue(parts[4]) ? parts[4] : 'Manual',
-      country: isRealVenue(parts[4]) ? (parts[5] || '') : (parts.slice(4).filter(Boolean).join(', ')),
+      // Festival venue names contain commas of their own ("Southbank Centre,
+      // Royal Festival Hall"), so re-join the split pieces before testing.
+      venue: vm.venue || 'Manual',
+      country: vm.venue ? (parts.slice(4 + vm.span).filter(Boolean).join(', '))
+                        : (parts.slice(4).filter(Boolean).join(', ')),
       duration: '', showtimes: [], poster_url: '',
       taste_score: 5, taste_pct: 5, next_date: ''
     };
@@ -9525,6 +9605,8 @@ document.querySelectorAll('.tab').forEach(tab => {
     // Re-score and re-render
     rescoreAll();
     document.getElementById('movie-count').textContent = MOVIES.length;
+    // saved listings can introduce venues the initial build never saw
+    if (typeof rebuildVenueFilter === 'function') rebuildVenueFilter();
     return added;
   }
 
@@ -9794,6 +9876,7 @@ document.querySelectorAll('.tab').forEach(tab => {
       rescoreAll();
       render();
       document.getElementById('movie-count').textContent = MOVIES.length;
+      if (typeof rebuildVenueFilter === 'function') rebuildVenueFilter();
       setStatus('pdf-status', 'Extracted ' + movies.length + ' films (' + stTotal + ' showtimes). Added ' + added + ' new, updated ' + updated + '. Total: ' + MOVIES.length, 'success');
     } catch(err) {
       setStatus('pdf-status', 'Error parsing PDF: ' + err.message, 'error');
@@ -10379,6 +10462,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     localStorage.setItem('cinema_added_movies', JSON.stringify(saved));
     rescoreAll();
     document.getElementById('movie-count').textContent = MOVIES.length;
+    if (typeof rebuildVenueFilter === 'function') rebuildVenueFilter();
     return { added, merged, screenings };
   }
 
@@ -10840,6 +10924,9 @@ document.querySelectorAll('.tab').forEach(tab => {
   // NB: cannot define window.MOVIES (a top-level `let MOVIES` already shadows it),
   // so tests read window.__MOVIES() instead.
   window.__MOVIES = () => MOVIES;
+  // Venue helpers, exposed for the test suites (filter_tests.html).
+  window.isRealVenue = isRealVenue;
+  window.__VENUES = { CANON_VENUES, FESTIVAL_VENUES, ALL_VENUES };
   window.render = render;
 
   document.getElementById('paste-listings-btn').addEventListener('click', function() {
@@ -11016,6 +11103,7 @@ document.querySelectorAll('.tab').forEach(tab => {
 
         rescoreAll();
         document.getElementById('movie-count').textContent = MOVIES.length;
+        if (typeof rebuildVenueFilter === 'function') rebuildVenueFilter();
         setStatus('csv-status', 'Parsed ' + rowCount + ' screenings across ' + movieMap.size + ' films from ' + file.name + ' &mdash; added ' + addedNew + ' new, merged ' + mergedExisting + ' existing. Total: ' + MOVIES.length, 'success');
       } else {
         // -- Fallback: simple CSV / text format --
@@ -11054,6 +11142,7 @@ document.querySelectorAll('.tab').forEach(tab => {
       MOVIES.push(m); byKey.set(k, m);
     });
     document.getElementById('movie-count').textContent = MOVIES.length;
+    if (typeof rebuildVenueFilter === 'function') rebuildVenueFilter();
   }
   // Re-apply showtimes parsed from an uploaded BFI programme onto the built-in films,
   // so dates backfilled into pre-existing entries survive a page reload.
