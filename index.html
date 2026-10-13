@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v5.2</title>
+<title>Cinema Aggregator v5.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -772,7 +772,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v5.2</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v5.3</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -1214,6 +1214,12 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     <h2 style="margin-top:2rem;">Version History</h2>
 
     <div class="help-section">
+      <h3>v5.3 &mdash; 13 October 2026</h3>
+      <ul>
+        <li><strong>Fixed: pasting Prince Charles Cinema text copied with a normal browser selection reported "found no screenings".</strong> The PCC paste parser only understood the markdown-link shape (<code>[Title](url)</code>, <code>[Book3:15 pm](url)</code>, run-on <code>198571minsJapan(12A)Anime</code>). A plain Ctrl/Cmd-C off the What's On page puts every field on its own line &mdash; title, year, <code>119mins</code>, country, <code>(15)</code>, genre, then <code>Tuesday 13th October</code> / <code>BOOK</code> or <code>SOLD OUT</code> / <code>8:25 PM</code> / one format tag per line &mdash; so nothing matched. New <code>parsePCCPlainText()</code> handles that layout; <code>parsePCCText()</code> now dispatches on whether link syntax is present, and auto-detect recognises the plain form.</li>
+        <li>Plain-form details handled: optional year (<code>In a Lonely Place</code>) and optional country (<code>Club Kid</code>) lines; several times under one date; <code>SOLD OUT</code> carried as a note; multi-line format tags joined (<code>4K</code> + <code>SUB</code> &rarr; <code>4K SUB</code>, <code>35mm</code> + <code>Intro</code>); January dates roll to the next year; the footer/address line is not mistaken for a format tag.</li>
+        <li>10 new tests in <code>parser_tests.html</code> (29 total) against the real plain-copy format, verified red on v5.2 before the fix.</li>
+      </ul>
       <h3>v5.2 &mdash; 8 September 2026</h3>
       <ul>
         <li><strong>Fixed: the screenings TSV importer collapsed a film's venues into one.</strong> Rows were grouped by <code>title|year</code> only, so a festival film playing several venues (All of a Sudden: BFI Southbank on 10 Oct, Royal Festival Hall on 18 Oct) became ONE record stamped with whichever venue was read first &mdash; the film then vanished from every other venue's filter, and its screenings piled onto the wrong card as apparent duplicates. Filtering the Royal Festival Hall showed 2 films instead of 27. The group key, the existing-record lookup and the localStorage key are now all <code>title|year|cinema</code>, matching <code>movieKey()</code>'s title+venue identity used elsewhere.</li>
@@ -10692,6 +10698,9 @@ document.querySelectorAll('.tab').forEach(tab => {
     // PCC rows are markdown-ish links plus a run-on metadata line.
     if (/^\[.+\]\(/m.test(text) && /^\d{0,4}\d+mins/m.test(text)) return 'Prince Charles Cinema';
     if (/princecharlescinema/i.test(text)) return 'Prince Charles Cinema';
+    // Plain browser-selection copy: "000mins" on its own line + "Tuesday 13th October".
+    if (/^\s*\d+mins\s*$/m.test(text) &&
+        /^\s*(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day\s+\d{1,2}(?:st|nd|rd|th)\s+[A-Z][a-z]+\s*$/m.test(text)) return 'Prince Charles Cinema';
     // Garden stats lines end in "83m." and dates look like "Tue 25 Aug".
     if (/^\s*\*?\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{1,2}\s+[A-Z][a-z]{2}\s*$/m.test(text) &&
         /\d+m\.\s*$/m.test(text)) return 'The Garden Cinema';
@@ -10802,8 +10811,105 @@ document.querySelectorAll('.tab').forEach(tab => {
     return [...byKey.values()];
   }
 
-  // Prince Charles Cinema — plain text from the What's On page.
+  // Prince Charles Cinema — text copied off the What's On page. Two shapes:
+  //  (a) markdown-ish (reader-mode / some copy tools): "[Title](url)" then a
+  //      run-on "198571minsJapan(12A)Anime" line and "* [Book12:00 pm](url)".
+  //  (b) plain browser selection: every field on its own line —
+  //      Title / 1985 / 71mins / Japan / (12A) / Anime / Directed by… /
+  //      Starring… / synopsis / "Tuesday 13th October" / BOOK|SOLD OUT /
+  //      "3:15 PM" / one format tag per line (4K, SUB, 35mm, HOH, Intro…).
   function parsePCCText(text, refDate) {
+    if (!/^\[.+\]\(/m.test(text)) return parsePCCPlainText(text, refDate);
+    return parsePCCLinkedText(text, refDate);
+  }
+
+  function parsePCCPlainText(text, refDate) {
+    const venue = 'Prince Charles Cinema';
+    const lines = text.split(/\r?\n/).map(l => l.replace(/ /g, ' ').trim());
+    const reMins = /^(\d+)mins$/;
+    const reYear = /^\d{4}$/;
+    const reCert = /^\((.+?)\)$/;
+    const reDate = /^(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day\s+(\d{1,2})(?:st|nd|rd|th)?\s+([A-Z][a-z]+)$/;
+    const reBook = /^(BOOK|SOLD\s*OUT)$/i;
+    const reTime = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i;
+
+    // Pass 1: a title is the line before "[YYYY]\n000mins". Knowing every
+    // title index up front stops a title being swallowed as a format tag.
+    const titleAt = new Set();
+    for (let i = 1; i < lines.length; i++) {
+      if (!reMins.test(lines[i])) continue;
+      let t = i - 1;
+      if (reYear.test(lines[t])) t--;
+      if (t >= 0 && lines[t]) titleAt.add(t);
+    }
+    if (!titleAt.size) return [];
+
+    const films = [];
+    let cur = null, pendingDate = '', soldOut = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line) continue;
+
+      if (titleAt.has(i)) {
+        cur = { title: line, venue: venue, showtimes: [] };
+        films.push(cur);
+        pendingDate = ''; soldOut = false;
+        // Metadata block: [year] mins [country] (cert) [genre]
+        let j = i + 1;
+        if (reYear.test(lines[j])) { cur.year = lines[j]; j++; }
+        const mm = lines[j].match(reMins); cur.duration = mm[1] + 'min'; j++;
+        if (lines[j] && !reCert.test(lines[j]) && !/^Directed by /.test(lines[j])) {
+          if (!/^We can't tell you$/i.test(lines[j])) cur.country = lines[j];
+          j++;
+        }
+        const mc = (lines[j] || '').match(reCert);
+        if (mc) { cur.certificate = mc[1]; j++; }
+        if (lines[j] && !/^Directed by /.test(lines[j]) && !/^Starring /.test(lines[j])) { cur.genre = lines[j]; j++; }
+        i = j - 1;
+        continue;
+      }
+      if (!cur) continue;
+
+      const mDir = line.match(/^Directed by (.+?)(?:Starring (.+))?$/);
+      if (mDir && !cur.director) {
+        cur.director = mDir[1].replace(/\s*\|\s*/g, ', ').replace(/\s+/g, ' ').trim().replace(/,$/, '');
+        continue;
+      }
+
+      const mDate = line.match(reDate);
+      if (mDate) {
+        const dm = parseDayMonth(mDate[1] + ' ' + mDate[2]);
+        pendingDate = dm ? isoDate(inferYear(dm.m, refDate), dm.m, dm.d) : '';
+        soldOut = false;
+        continue;
+      }
+
+      if (reBook.test(line)) { soldOut = /SOLD/i.test(line); continue; }
+
+      const mShow = line.match(reTime);
+      if (mShow && pendingDate) {
+        const time = normTime(line);
+        // Following bare lines are format tags until a date / BOOK / time /
+        // blank / next title appears.
+        const tags = [];
+        while (i + 1 < lines.length) {
+          const nxt = lines[i + 1];
+          if (!nxt || titleAt.has(i + 1) || reDate.test(nxt) || reBook.test(nxt) || reTime.test(nxt)) break;
+          if (!TEXT_FORMAT_TAGS.some(k => nxt.toUpperCase().indexOf(k.toUpperCase()) === 0)) break;
+          tags.push(nxt);
+          i++;
+        }
+        const st = { date: pendingDate, time: time || 'Various', format: splitFormatTag(tags.join(' ')) };
+        if (soldOut) st.note = 'SOLD OUT';
+        soldOut = false;
+        cur.showtimes.push(st);
+        continue;
+      }
+    }
+    return films;
+  }
+
+  function parsePCCLinkedText(text, refDate) {
     const venue = 'Prince Charles Cinema';
     const lines = text.split(/\r?\n/);   // PCC titles rely on the [Title](url) form
     const films = [];
@@ -12168,4 +12274,3 @@ async function generateHelpScreenshots() {
 </script>
 </body>
 </html>
-  §
