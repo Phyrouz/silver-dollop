@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cinema Aggregator v5.3</title>
+<title>Cinema Aggregator v5.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -772,7 +772,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
 
 <!-- ===== STICKY NAV ===== -->
 <div class="navbar">
-  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v5.3</span></h1>
+  <h1>Cinema Aggregator <span style="font-size:0.55rem;font-family:'Inter',sans-serif;color:var(--muted);font-weight:400;vertical-align:middle;">v5.4</span></h1>
   <div class="tabs">
     <div class="tab active" data-tab="all">All Movies</div>
     <div class="tab" data-tab="date">By Date</div>
@@ -984,6 +984,7 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
       <ul style="margin:0.3rem 0 0.6rem 1.2rem;padding:0;font-size:0.85rem;color:var(--muted);">
         <li><strong>Simple CSV:</strong> Title, Year, Director, Genre, Venue</li>
         <li><strong>Screenings TSV:</strong> tab-separated with headers <code>cinema, title, certificate, director, country, year, runtime_mins, seasons, date, time, format, notes</code> — one row per screening; the parser groups screenings by film and merges showtimes automatically</li>
+        <li><strong>Taste Score (optional TSV column):</strong> add a <code>taste_score</code> (or <code>Taste Score</code>) column with a 1&ndash;10 value and that score replaces the profile-computed one for the film. Top Picks, the ranking and Today's Suggestion then follow it. An optional <code>quote</code> column feeds the landing quote.</li>
       </ul>
       <label class="source-btn source-btn-primary" for="csv-upload">Upload File</label>
       <input type="file" id="csv-upload" class="source-file-input" accept=".csv,.txt,.tsv">
@@ -1214,6 +1215,13 @@ h1,h2,h3,.hero-title { font-family: 'Playfair Display', Georgia, serif; }
     <h2 style="margin-top:2rem;">Version History</h2>
 
     <div class="help-section">
+      <h3>v5.4 &mdash; 26 October 2026</h3>
+      <ul>
+        <li><strong>Taste Score from the source TSV.</strong> The screenings TSV importer reads an optional <code>taste_score</code> column (header <code>Taste Score</code> also accepted, values 1&ndash;10, decimals rounded). A film with a TSV score uses it instead of the profile-computed score, so the ranking, the Min Score filter, Top Picks (score &ge; 7) and the Week Planner all follow it. Films without one keep the profile score.</li>
+        <li>Scores are stored per user in <code>cinema_tsv_scores</code>, keyed by film (<code>title|year</code>) rather than venue, so one score covers every venue a film plays and also built-in records the TSV merged into. The key is in <code>USER_KEYS</code>, so it is included in backup and server sync. Re-importing a TSV updates the stored scores.</li>
+        <li><strong>Today's Suggestion now comes from your scored listings.</strong> The landing page picks the highest TSV-scored film that still has an upcoming showing and is not marked Viewed, rotating daily through the top tier (best score and one below, up to 7 films). It shows the score and the next showing. When nothing qualifies it falls back to the built-in Movie of the Day pool, as before.</li>
+        <li>Optional <code>quote</code> TSV column supplies the landing quote; otherwise the built-in pool's quote is used when the film is in it, and the quote is left blank when there is none.</li>
+      </ul>
       <h3>v5.3 &mdash; 13 October 2026</h3>
       <ul>
         <li><strong>Fixed: pasting Prince Charles Cinema text copied with a normal browser selection reported "found no screenings".</strong> The PCC paste parser only understood the markdown-link shape (<code>[Title](url)</code>, <code>[Book3:15 pm](url)</code>, run-on <code>198571minsJapan(12A)Anime</code>). A plain Ctrl/Cmd-C off the What's On page puts every field on its own line &mdash; title, year, <code>119mins</code>, country, <code>(15)</code>, genre, then <code>Tuesday 13th October</code> / <code>BOOK</code> or <code>SOLD OUT</code> / <code>8:25 PM</code> / one format tag per line &mdash; so nothing matched. New <code>parsePCCPlainText()</code> handles that layout; <code>parsePCCText()</code> now dispatches on whether link syntax is present, and auto-detect recognises the plain form.</li>
@@ -1729,7 +1737,7 @@ const _origRemoveItem = localStorage.removeItem.bind(localStorage);
 // the cinema app no longer syncs or reads that cross-tool data.
 const USER_KEYS = ['cinema_viewed','cinema_schedule','cinema_profiles','cinema_active_profile',
   'cinema_netflix_titles','cinema_fav_films','cinema_added_movies','cinema_bfi_showtimes',
-  'cinema_to_see'];
+  'cinema_to_see','cinema_tsv_scores'];
 
 // Override localStorage for user-scoped keys
 const origLS = {
@@ -8482,18 +8490,66 @@ const MOTD_POOL = [
 (function() {
   const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(),0,0)) / 86400000);
 
-  // Movie of the day
-  const idx = dayOfYear % MOTD_POOL.length;
-  const motd = MOTD_POOL[idx];
-  document.getElementById('motd-title').textContent = motd.title;
-  document.getElementById('motd-year').textContent = motd.year;
-  document.getElementById('motd-director').textContent = motd.director;
-  document.getElementById('motd-genre').textContent = motd.genre;
-  document.getElementById('motd-summary').textContent = motd.summary;
+  // Movie of the day: the best TSV-scored film that is still showing, rotating daily
+  // through the top tier. Falls back to the built-in pool when nothing qualifies
+  // (no TSV imported yet, or every scored film has played).
+  function pickScoredFilm() {
+    const todayStr = new Date().toISOString().slice(0,10);
+    // Skip films already marked Viewed (the Viewed list may not be loaded yet on first call).
+    const seen = m => { try { return isViewed(m); } catch (e) { return false; } };
+    const pool = MOVIES.filter(m => m.tsv_score != null &&
+      (m.showtimes || []).some(s => s.date && s.date >= todayStr) &&
+      !seen(m));
+    if (!pool.length) return null;
+    // One entry per film: a film playing several venues has one record per venue,
+    // so merge their showtimes (stamped with venue) and take any record's quote.
+    const films = new Map();
+    pool.forEach(m => {
+      const k = tsvScoreKey(m);
+      const shows = (m.showtimes || []).map(s => Object.assign({ venue: m.venue }, s));
+      const f = films.get(k);
+      if (!f) { films.set(k, Object.assign({}, m, { showtimes: shows })); return; }
+      f.showtimes = f.showtimes.concat(shows);
+      if (!f.quote && m.quote) f.quote = m.quote;
+      if (!f.summary && m.summary) f.summary = m.summary;
+    });
+    const unique = [...films.values()];
+    const best = Math.max(...unique.map(m => m.tsv_score));
+    const tier = unique.filter(m => m.tsv_score >= best - 1)
+      .sort((a, b) => b.tsv_score - a.tsv_score || a.title.localeCompare(b.title))
+      .slice(0, 7);
+    return tier[dayOfYear % tier.length];
+  }
 
-  // Quote from the same movie
-  document.getElementById('quote-text').textContent = motd.quote || '';
-  document.getElementById('quote-src').textContent = '— ' + motd.title + ' (' + motd.year + ')';
+  function nextShowing(m) {
+    const todayStr = new Date().toISOString().slice(0,10);
+    const st = (m.showtimes || []).filter(s => s.date && s.date >= todayStr)
+      .sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')))[0];
+    if (!st) return '';
+    const d = new Date(st.date + 'T00:00:00');
+    const day = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    return 'Next showing: ' + day + (st.time ? ' ' + st.time : '') + ' · ' + (st.venue || m.venue || '');
+  }
+
+  function setLandingSuggestion() {
+    const scored = pickScoredFilm();
+    const motd = scored || MOTD_POOL[dayOfYear % MOTD_POOL.length];
+    const poolMatch = MOTD_POOL.find(x => x.title.toLowerCase() === (motd.title || '').toLowerCase());
+    document.getElementById('motd-title').textContent = motd.title;
+    document.getElementById('motd-year').textContent = motd.year || '';
+    document.getElementById('motd-director').textContent = motd.director || '';
+    document.getElementById('motd-genre').textContent = motd.genre || '';
+    document.getElementById('motd-summary').textContent = scored
+      ? [motd.summary, 'Taste Score ' + motd.tsv_score + '/10', nextShowing(motd)].filter(Boolean).join(' — ')
+      : motd.summary;
+
+    // Quote from the same movie (TSV "quote" column, else the built-in pool)
+    const quote = motd.quote || (poolMatch && poolMatch.quote) || '';
+    document.getElementById('quote-text').textContent = quote;
+    document.getElementById('quote-src').textContent = quote ? '— ' + motd.title + (motd.year ? ' (' + motd.year + ')' : '') : '';
+  }
+  window.setLandingSuggestion = setLandingSuggestion;
+  setLandingSuggestion();
 
 
   // Dismiss landing -> go to Top Picks
@@ -8827,17 +8883,39 @@ function vc(venue) {
 }
 function tc(s) { return s >= 7 ? 'taste-high' : s >= 4 ? 'taste-mid' : 'taste-low'; }
 
+// --- Taste Scores supplied by the source TSV ---
+// Stored per user as { "title|year": score }. A film with a TSV score uses it as-is;
+// films without one keep the score computed from the active Taste Profile.
+function getTsvScores() { return JSON.parse(localStorage.getItem('cinema_tsv_scores') || '{}'); }
+function tsvScoreKey(m) { return (m.title || '').trim().toLowerCase() + '|' + (m.year || '').toString().trim(); }
+function parseTsvScore(raw) {
+  const n = parseFloat(String(raw == null ? '' : raw).trim().replace(',', '.'));
+  if (!isFinite(n)) return null;
+  return Math.max(1, Math.min(10, Math.round(n)));
+}
+function tsvScoreFor(m, scores) {
+  // Exact title|year first; a record with no year still matches a scored film of the same title.
+  if (scores[tsvScoreKey(m)] != null) return scores[tsvScoreKey(m)];
+  if (!m.year) {
+    const prefix = (m.title || '').trim().toLowerCase() + '|';
+    const hit = Object.keys(scores).find(k => k.startsWith(prefix));
+    if (hit) return scores[hit];
+  }
+  return null;
+}
+
 // --- Client-side re-scoring from active profile ---
 function rescoreAll() {
   const profiles = JSON.parse(localStorage.getItem('cinema_profiles') || '{}');
   const activeId = localStorage.getItem('cinema_active_profile') || '';
-  const p = profiles[activeId];
-  if (!p) return;
+  const p = profiles[activeId] || null;
+  const tsvScores = getTsvScores();
+  if (!p && !Object.keys(tsvScores).length) return;
 
-  const lovedDirs = (p.directors || '').split('\n').map(s => s.trim().toLowerCase()).filter(Boolean);
-  const likedGenres = (p.genres || '').split('\n').map(s => s.trim().toLowerCase()).filter(Boolean);
-  const disliked = (p.dislike || '').split('\n').map(s => s.trim().toLowerCase()).filter(Boolean);
-  const favFilms = (p.films || '').split('\n').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const lovedDirs = ((p && p.directors) || '').split('\n').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const likedGenres = ((p && p.genres) || '').split('\n').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const disliked = ((p && p.dislike) || '').split('\n').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const favFilms = ((p && p.films) || '').split('\n').map(s => s.trim().toLowerCase()).filter(Boolean);
 
   // Whole-word test, so "persona" doesn't match "personality" and a director
   // merely name-dropped in a synopsis doesn't score like the author of the film.
@@ -8849,6 +8927,10 @@ function rescoreAll() {
 
   // Score each movie
   const rawScores = MOVIES.map(m => {
+    const fromTsv = tsvScoreFor(m, tsvScores);
+    m.tsv_score = fromTsv;
+    if (fromTsv != null) return fromTsv;
+    if (!p) return m.taste_score || 5;
     let score = 5;
     const dir = (m.director || '').toLowerCase();
     const title = (m.title || '').toLowerCase();
@@ -8903,7 +8985,7 @@ function rescoreAll() {
   render();
 }
 
-const SCORE_INFO = 'Taste Score (1-10): computed from your active Taste Profile.\n\n' +
+const SCORE_INFO = 'Taste Score (1-10): taken from the "Taste Score" column of your imported screenings TSV when the film has one; otherwise computed from your active Taste Profile as below.\n\n' +
   'Base: 5.\n' +
   'Director: +4 when the film\'s director is on your list; +2 when the name only appears in the synopsis (e.g. an untagged retrospective screening).\n' +
   'Themes/genres: +2 for any of your genre keywords in the title, genre or synopsis.\n' +
@@ -11111,7 +11193,8 @@ document.querySelectorAll('.tab').forEach(tab => {
       if (isScreeningTsv) {
         // -- Structured screening TSV (one row per screening) --
         const sep = '\t';
-        const headers = firstLine.split(sep).map(h => h.trim().toLowerCase());
+        // "Taste Score" and "taste_score" are the same column.
+        const headers = firstLine.split(sep).map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
         const idx = (name) => headers.indexOf(name);
         const col = {
           cinema: idx('cinema'),
@@ -11126,6 +11209,8 @@ document.querySelectorAll('.tab').forEach(tab => {
           time: idx('time'),
           format: idx('format'),
           notes: idx('notes'),
+          taste: idx('taste_score'),
+          quote: idx('quote'),
         };
         if (col.title < 0 || col.cinema < 0) {
           setStatus('csv-status', 'TSV missing required columns "title" and "cinema".', 'error');
@@ -11168,6 +11253,14 @@ document.querySelectorAll('.tab').forEach(tab => {
             };
             movieMap.set(key, movie);
           }
+          // Taste Score from the source file: the first valid value for a film wins.
+          if (col.taste >= 0 && movie.tsv_score == null) {
+            const ts = parseTsvScore(cells[col.taste]);
+            if (ts != null) movie.tsv_score = ts;
+          }
+          if (col.quote >= 0 && !movie.quote) {
+            movie.quote = (cells[col.quote] || '').trim();
+          }
           // Build showtime
           const date = (col.date >= 0 ? (cells[col.date] || '') : '').trim();
           const time = (col.time >= 0 ? (cells[col.time] || '') : '').trim();
@@ -11204,6 +11297,7 @@ document.querySelectorAll('.tab').forEach(tab => {
             if (!ex.director && nm.director) ex.director = nm.director;
             if (!ex.country && nm.country) ex.country = nm.country;
             if (!ex.duration && nm.duration) ex.duration = nm.duration;
+            if (!ex.quote && nm.quote) ex.quote = nm.quote;
             mergedExisting++;
           } else {
             MOVIES.push(nm);
@@ -11220,10 +11314,22 @@ document.querySelectorAll('.tab').forEach(tab => {
         });
         localStorage.setItem('cinema_added_movies', JSON.stringify(saved));
 
+        // Scores are kept by film (title|year), not by venue, so one score covers
+        // every venue the film plays and also built-in records the TSV merged into.
+        const tsvScores = getTsvScores();
+        let scored = 0;
+        movieMap.forEach(nm => {
+          if (nm.tsv_score == null) return;
+          tsvScores[tsvScoreKey(nm)] = nm.tsv_score;
+          scored++;
+        });
+        if (scored) localStorage.setItem('cinema_tsv_scores', JSON.stringify(tsvScores));
+
         rescoreAll();
+        if (typeof setLandingSuggestion === 'function') setLandingSuggestion();
         document.getElementById('movie-count').textContent = MOVIES.length;
         if (typeof rebuildVenueFilter === 'function') rebuildVenueFilter();
-        setStatus('csv-status', 'Parsed ' + rowCount + ' screenings across ' + movieMap.size + ' films from ' + (fileName || 'file') + ' &mdash; added ' + addedNew + ' new, merged ' + mergedExisting + ' existing. Total: ' + MOVIES.length, 'success');
+        setStatus('csv-status', 'Parsed ' + rowCount + ' screenings across ' + movieMap.size + ' films from ' + (fileName || 'file') + ' &mdash; added ' + addedNew + ' new, merged ' + mergedExisting + ' existing' + (scored ? ', ' + scored + ' with a Taste Score' : '') + '. Total: ' + MOVIES.length, 'success');
       } else {
         // -- Fallback: simple CSV / text format --
         let start = 0;
@@ -11463,6 +11569,8 @@ document.querySelectorAll('.tab').forEach(tab => {
   }
   refreshSelect();
   rescoreAll();
+  // Saved listings and TSV scores are loaded by now; re-pick today's suggestion.
+  if (typeof setLandingSuggestion === 'function') setLandingSuggestion();
 })();
 
 // --- My Schedule (Calendar View) ---
